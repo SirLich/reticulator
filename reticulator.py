@@ -1,4 +1,8 @@
 from __future__ import annotations
+# from cached_property import cached_property
+
+from functools import cached_property
+
 from io import TextIOWrapper
 import os
 import json
@@ -80,21 +84,20 @@ class TextureType(Enum):
     TGA = 2
 
 class PackLocation(Enum):
+    PACK = 0
     DEV = 1
     WORLD = 2
-    PACK = 0
 
-# CLASSES
 class Resource():
-    def __init__(self, pack: Pack, path: str) -> None:
+    def __init__(self, pack: Pack, file_path: str) -> None:
         self.pack = pack
-        self.path = path
+        self.file_path = file_path
     
     def save(self) -> None:
         raise NotImplementedError
 
 class SubResource():
-    def __init__(self, parent:JsonResource, path:str, name:str) -> None:
+    def __init__(self, parent: JsonResource, path: str, name: str) -> None:
         self.parent = parent
         self.path = path
         self.name = name
@@ -108,10 +111,17 @@ class SubResource():
         save_nested_json(self.parent.data, self.path, self.name, self.data)
 
 class ComponentGroup(SubResource):
+    # Init
     def __init__(self, parent, path, name):
         super().__init__(parent, path, name)
-        self.components = self.__load_components()
-        
+        self.components = []
+    
+    # Properties
+    @cached_property
+    def components(self):
+        return self.__load_components()
+    
+    # Private loaders
     def __load_components(self) -> list[Component]:
         components = []
         for key in get_nested_json(self.parent.data, self.path, self.name):
@@ -122,18 +132,19 @@ class ComponentGroup(SubResource):
         return components
 
 class Component(SubResource):
+    # Init
     def __init__(self, entity, group, path, name):
         super().__init__(entity, path, name)
         self.entity = entity
         self.group = group
 
-
 class JsonResource(Resource):
-    def __init__(self, pack, path):
-        super().__init__(pack, path)
+    # Init
+    def __init__(self, pack:Pack, file_path) -> None:
+        super().__init__(pack, file_path)
         self.resources = []
         self.pack = pack
-        self.data = self.pack.load_json(self.path)
+        self.data = self.pack.load_json(self.file_path)
         self.pack.register_resource(self)
 
     def register_resource(self, resource):
@@ -162,7 +173,8 @@ class Manifest(JsonResource):
     def get_dependencies(self):
         pass
 
-    
+
+
 class Pack():
     def __init__(self, input_path: str):
         self.resources = []
@@ -218,8 +230,22 @@ class FilePathResource(Resource):
 class BehaviorPack(Pack):
     def __init__(self, input_path):
         super().__init__(input_path)
-        self.entities = self.__load_entities()
+        self._entities = []
 
+    # Properties
+    @cached_property
+    def entities(self) -> list[EntityBP]:
+        self._entities = self.__load_entities()
+        return self._entities
+    
+    # Methods
+    def get_entity(self, identifier:str) -> EntityBP:
+        for entity in self.entities:
+            if entity.identifier == identifier:
+                return entity
+        raise AssetNotFoundError 
+    
+    # Private loaders
     def __load_entities(self) -> list[EntityBP]:
         base_directory = os.path.join(self.input_path, "entities")
         entities = []
@@ -229,28 +255,90 @@ class BehaviorPack(Pack):
             
             entities.append(EntityBP(self, entity_path))
             
-        
         return entities
 
-    def get_entities(self) -> list[EntityBP]:
-        return self.entities
+class AnimationFileRP(JsonResource):
+    def __init__(self, pack: Pack, file_path) -> None:
+        super().__init__(pack, file_path)
+        self.__animations = []
+
+    @cached_property
+    def animations(self):
+        self.__load_animations()
+        return self.__animations
+
+    def __load_animations(self) -> list[AnimationRP]:
+        for key in self.data.get("animations", {}).keys():
+            self.__animations.append(AnimationRP(self, ["animations"], key))
+            
+
+class AnimationRP(SubResource):
+    def __init__(self, parent: JsonResource, path: str, name: str) -> None:
+        super().__init__(parent, path, name)
+
+class EntityRP(JsonResource):
+    # Init
+    def __init__(self, pack, path):
+        super().__init__(pack, path)
+        self.__animations = []
     
-    def get_entity(self, identifier:str) -> EntityBP:
-        for entity in self.entities:
-            if entity.identifier == identifier:
-                return entity
-        raise AssetNotFoundError 
+    # Properties
+    @cached_property
+    def animations(self) -> list[AnimationRP]:
+        self.__load_animations()
+        return self.__animations
+    
+    # Properties
+    @property
+    def identifier(self):
+        return self.data["minecraft:client_entity"]["description"]["identifier"]
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        self.data["minecraft:client_entity"]["description"]["identifier"] = identifier
+
+    # Loaders
+    def __load_animations(self) -> None:
+        for key in self.data.get("minecraft:client_entity", {}).get("description", {}).get("animations", {}).keys():
+            name = self.data.get("minecraft:client_entity", {}).get("description", {}).get("animations", {}).get(key)
+            for animation in self.pack.animations:
+                if animation.name == name:
+                    self.__animations.append(animation)
 
 class EntityBP(JsonResource):
+    def __init__(self, pack, path):
+        super().__init__(pack, path)
+
+        self._identifier = ""
+        self._components = []
+        self._component_groups = []
+
+    # Properties
+    @property
+    def identifier(self):
+        return self.data["minecraft:entity"]["description"]["identifier"]
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        self.data["minecraft:entity"]["description"]["identifier"] = identifier
+
+    @cached_property
+    def components(self):
+        return self.__load_components()
+    
+    @cached_property
+    def component_groups(self):
+        return self.__load_component_groups()
+
+    # Methods
     def get_identifier(self):
         return self.identifier
 
-    def get_group(self, name:str) -> ComponentGroup:
-        for group in self.groups:
+    def get_component_group(self, name:str) -> ComponentGroup:
+        for group in self.component_groups:
             if group.name == name:
                 return group
         raise AssetNotFoundError
-
 
     def get_component(self, name) -> Component:
         for component in self.get_components():
@@ -258,6 +346,7 @@ class EntityBP(JsonResource):
                 return component
         raise AssetNotFoundError
 
+    # Private loaders
     def __load_component_groups(self) -> list[ComponentGroup]:
         component_groups = []
         for key in self.data.get("minecraft:entity", {}).get("component_groups", {}).keys():
@@ -272,13 +361,6 @@ class EntityBP(JsonResource):
         
         return components
 
-    def __init__(self, pack, path):
-        super().__init__(pack, path)
-
-        self.identifier = self.data["minecraft:entity"]["description"]["identifier"]
-        self.components = self.__load_components()
-        self.component_groups = self.__load_component_groups()
-
 class RpItem(JsonResource):
     def __init__(self):
         pass
@@ -290,16 +372,59 @@ class Texture(FilePathResource):
     def get_texture_type(self):
         pass
 
-class BpItem(JsonResource):
+class BPItem(JsonResource):
     def __init__(self):
         pass
 
 class ResourcePack(Pack):
-    def __init__(self):
-        pass
+    # Init
+    def __init__(self, input_path):
+        super().__init__(input_path)
+        self.__animations = []
+        self.__animation_files = []
+        self.__entities = []
+    
+    # Properties
+    @cached_property
+    def animations(self) -> list[AnimationRP]:
+        self.__load_animations()
+        return self.__animations
+    
+    @cached_property
+    def animation_files(self) -> list[AnimationFileRP]:
+        self.__load_animation_files()
+        return self.__animation_files
 
-    def get_items():
-        pass
+    @cached_property
+    def entities(self) -> list[EntityRP]:
+        self.__load_entities()
+        return self.__entities
+
+    # Methods
+    def get_entity(self, identifier:str) -> EntityRP:
+        for entity in self.entities:
+            if entity.identifier == identifier:
+                return entity
+        raise AssetNotFoundError 
+
+    # Loaders
+    def __load_animation_files(self) -> None:
+        base_directory = os.path.join(self.input_path, "animations")
+        for entity_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            entity_path = os.path.relpath(entity_path, self.input_path)
+            self.__animation_files.append(AnimationFileRP(self, entity_path))
+
+    def __load_entities(self) -> None:
+        base_directory = os.path.join(self.input_path, "entity")
+        for entity_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            entity_path = os.path.relpath(entity_path, self.input_path)
+            self.__entities.append(EntityRP(self, entity_path))
+
+    def __load_animations(self) -> None:
+        for animation_file in self.animation_files:
+            for animation in animation_file.animations:
+                self.__animations.append(animation)
+            
 
 class Reticulator():
     def __init__(self, username=None):
@@ -321,8 +446,8 @@ class Reticulator():
     def load_behavior_pack_from_uuid(self):
         pass
 
-    def load_resource_pack_from_path(self):
-        pass
+    def load_resource_pack_from_path(self, input_path):
+        return ResourcePack(input_path)
 
     def get_resource_packs(self):
         pass
