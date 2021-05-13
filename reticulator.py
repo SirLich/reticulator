@@ -167,15 +167,20 @@ class SubResource():
         self.parent = parent
         self.datum = datum
         self.json_path = datum.full_path
-        self.__data = NotifyDict(datum.value, owner=self)
+        self.__data = None
         self.__dirty = False
-        self.__saved = False
         self.parent.register_resource(self)
         self.name = str(datum.path)
         self.resources = []
     
     @property
     def data(self):
+        raw_data = self.datum.value
+        if isinstance(raw_data, dict):
+            self.__data = NotifyDict(raw_data, owner=self)
+        if isinstance(raw_data, list):
+            self.__data = NotifyList(raw_data, owner=self)
+
         return self.__data
 
     @data.setter
@@ -196,15 +201,15 @@ class SubResource():
 
     def register_resource(self, resource):
         self.resources.append(resource)
-
+        
     def save(self):
         if self.__dirty:
             for resource in self.resources:
                 resource.save()
             self.datum.full_path.update(self.parent.data, self.data)
             self.__dirty = False
-
             self.parent.save()
+
 
 class Component(SubResource):
     def __init__(self, entity: JsonResource, group: ComponentGroup, datum: DatumInContext) -> None:
@@ -221,7 +226,6 @@ class ComponentGroup(SubResource):
     def components(self) -> list[Component]:
         component_path = parse("*")
         for match in component_path.find(self.data):
-            temp = copy.deepcopy(match)
             self.__components.append(Component(self.parent, self, match))
         return self.__components
         
@@ -377,8 +381,8 @@ class AnimationFileRP(JsonResource):
         return self.__animations        
             
 class AnimationRP(SubResource):
-    def __init__(self, parent: JsonResource, path: str, name: str) -> None:
-        super().__init__(parent, path, name)
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
 
 class EntityRP(JsonResource):
     # Init
@@ -390,7 +394,9 @@ class EntityRP(JsonResource):
     # Properties
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        self.__load_animations()
+        animation_path = parse("$.'minecraft:client_entity'.description.animations.*")
+        for match in animation_path.find(self.data):
+            self.__animations.append(AnimationRP(self, match))
         return self.__animations
     
     @cached_property
