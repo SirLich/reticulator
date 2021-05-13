@@ -1,11 +1,8 @@
 from __future__ import annotations
-# from cached_property import cached_property
-
 from functools import cached_property
-
 from jsonpath_ng import *
-
 from io import TextIOWrapper
+from enum import Enum
 
 import os
 import json
@@ -13,9 +10,7 @@ import glob
 import copy
 import traceback
 
-from enum import Enum
 
-from jsonpath_ng.parser import JsonPathParser
 
 # GLOBALS
 DEBUG = 0
@@ -83,6 +78,71 @@ def get_json_from_file(fh:TextIOWrapper, path:str) -> dict:
             print("ERROR loading: " + path)
             return {}
 
+"""
+A dict, which tells its parent when it is edited/saved.
+"""
+class NotifyDict(dict):
+    def __init__(self, *args, owner=None, **kwargs):
+        self.__owner = owner
+        self.__dirty = False
+
+        if len(args) > 0:
+            for key, value in args[0].items():
+                if isinstance(value, dict):
+                    args[0][key] = NotifyDict(value, owner=self.__owner)
+                if isinstance(value, list):
+                    args[0][key] = NotifyList(value, owner=self.__owner)
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, attr, value):
+        if isinstance(value, dict):
+            value = NotifyDict(value, owner=self.__owner)
+        if isinstance(value, list):
+            value = NotifyList(value, owner=self.__owner)
+        super().__setitem__(attr, value)
+        self.dirty = True
+    
+    @property
+    def dirty(self):
+        return self.__dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self.__dirty = dirty
+        if(self.__owner != None):
+            self.__owner.dirty = dirty
+
+class NotifyList(list):
+    def __init__(self, *args, owner=None, **kwargs):
+        self.__dirty = False
+        self.__owner = owner
+        if len(args) > 0:
+            for i in range(len(args[0])):
+                if isinstance(args[0][i], dict):
+                    args[0][i] = NotifyDict(args[0][i], owner=self.__owner)
+                if isinstance(args[0][i], list):
+                    args[0][i] = NotifyList(args[0][i], owner=self.__owner)
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, attr, value):
+        if isinstance(value, dict):
+            value = NotifyDict(value, owner=self.__owner)
+        if isinstance(value, list):
+            value = NotifyList(value, owner=self.__owner)
+        super().__setitem__(attr, value)
+        self.dirty = True
+
+    @property
+    def dirty(self):
+        return self.__dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self.__dirty = dirty
+        if(self.__owner != None):
+            self.__owner.dirty = dirty
+
+
 # ENUMS
 class TextureType(Enum):
     PNG = 1
@@ -107,10 +167,29 @@ class SubResource():
         self.parent = parent
         self.datum = datum
         self.json_path = datum.full_path
-        self.data = datum.value
+        self.__data = NotifyDict(datum.value, owner=self)
+        self.__dirty = False
+        self.__saved = False
         self.parent.register_resource(self)
         self.name = str(datum.path)
         self.resources = []
+    
+    @property
+    def data(self):
+        return self.__data
+
+    @data.setter
+    def data(self, data):
+        self.__data = data
+
+    @property
+    def dirty(self):
+        return self.__dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self.__dirty = dirty
+        self.parent.dirty = dirty
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
@@ -119,10 +198,13 @@ class SubResource():
         self.resources.append(resource)
 
     def save(self):
-        self.parent.dirty = True
-        for resource in self.resources:
-            resource.save()
-        self.datum.full_path.update(self.parent.data, self.data)
+        if self.__dirty:
+            for resource in self.resources:
+                resource.save()
+            self.datum.full_path.update(self.parent.data, self.data)
+            self.__dirty = False
+
+            self.parent.save()
 
 class Component(SubResource):
     def __init__(self, entity: JsonResource, group: ComponentGroup, datum: DatumInContext) -> None:
@@ -144,11 +226,12 @@ class ComponentGroup(SubResource):
         return self.__components
         
 class JsonResource(Resource):
-    def __init__(self, pack:Pack, file_path) -> None:
+    def __init__(self, pack:Pack, file_path:str) -> None:
         super().__init__(pack, file_path)
         self.resources = []
         self.pack = pack
-        self.data = self.pack.load_json(self.file_path)
+        self.__dirty = False
+        self.data = NotifyDict(self.pack.load_json(self.file_path))
         self.pack.register_resource(self)
 
     def register_resource(self, resource):
@@ -157,9 +240,19 @@ class JsonResource(Resource):
     def __str__(self):
         return json.dumps(self.data, indent=2)
 
+    @property
+    def dirty(self):
+        return self.__dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self.__dirty = dirty
+
     @Override
     def save(self):
         if self.dirty:
+            self.dirty = False
+            print("Saving: " + self.file_path)
             for resource in self.resources:
                 resource.save()
             self.pack.save_json(self.file_path, self.data)
