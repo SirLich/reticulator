@@ -18,10 +18,6 @@ DEBUG = 0
 class AssetNotFoundError(Exception):
     pass
 
-# SUGAR
-def Override(func):
-    return func
-
 # GLOBALS
 
 def debug() -> None:
@@ -57,10 +53,11 @@ def get_json_from_file(fh:TextIOWrapper, path:str) -> dict:
             print("ERROR loading: " + path)
             return {}
 
+#TODO: Add notify string, int, etc
+
 class NotifyDict(dict):
-    def __init__(self, *args, owner=None, **kwargs):
+    def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
-        self.__dirty = False
 
         if len(args) > 0:
             for key, value in args[0].items():
@@ -70,34 +67,40 @@ class NotifyDict(dict):
                     args[0][key] = NotifyList(value, owner=self.__owner)
         super().__init__(*args, **kwargs)
 
+
+    def get_item(self, attr):
+        try:
+            return self.__getitem__(attr)
+        except:
+            return None
+        
     def __setitem__(self, attr, value):
         if isinstance(value, dict):
             value = NotifyDict(value, owner=self.__owner)
         if isinstance(value, list):
             value = NotifyList(value, owner=self.__owner)
+
+        if self.get_item(attr) != value:
+            if(self.__owner != None):
+                self.__owner.dirty = True
+
         super().__setitem__(attr, value)
-        self.dirty = True
-    
-    @property
-    def dirty(self):
-        return self.__dirty
-    
-    @dirty.setter
-    def dirty(self, dirty):
-        self.__dirty = dirty
-        if(self.__owner != None):
-            self.__owner.dirty = dirty
+
+
+
+        
 
 class NotifyList(list):
-    def __init__(self, *args, owner=None, **kwargs):
-        self.__dirty = False
+    def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
+
         if len(args) > 0:
             for i in range(len(args[0])):
                 if isinstance(args[0][i], dict):
                     args[0][i] = NotifyDict(args[0][i], owner=self.__owner)
                 if isinstance(args[0][i], list):
                     args[0][i] = NotifyList(args[0][i], owner=self.__owner)
+
         super().__init__(*args, **kwargs)
 
     def __setitem__(self, attr, value):
@@ -105,87 +108,77 @@ class NotifyList(list):
             value = NotifyDict(value, owner=self.__owner)
         if isinstance(value, list):
             value = NotifyList(value, owner=self.__owner)
+
+        if self.__getitem__(attr) != value:
+            if(self.__owner != None):
+                self.__owner.dirty = True
+        
         super().__setitem__(attr, value)
-        self.dirty = True
+
+
+class Resource():
+    def __init__(self, pack: Pack, file: JsonResource) -> None:
+        self.pack = pack
+        self.file = file
+        self._dirty = False
 
     @property
     def dirty(self):
-        return self.__dirty
-    
-    @dirty.setter
-    def dirty(self, dirty):
-        self.__dirty = dirty
-        if(self.__owner != None):
-            self.__owner.dirty = dirty
-
-
-# ENUMS
-class TextureType(Enum):
-    PNG = 1
-    TGA = 2
-
-class PackLocation(Enum):
-    PACK = 0
-    DEV = 1
-    WORLD = 2
-
-class Resource():
-    def __init__(self, pack: Pack, file_path: str) -> None:
-        self.pack = pack
-        self.file_path = file_path
-        self.dirty = False
-    
-    def save(self) -> None:
         raise NotImplementedError
 
-class SubResource():
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    @dirty.setter
+    def dirty(self, dirty):
+        raise NotImplementedError       
+
+class SubResource(Resource):
+    def __init__(self, parent: Resource, datum: DatumInContext) -> None:
+        # print("Making {}: {}".format(str(self.__class__.__name__) , str(datum.path)))
+        super().__init__(parent.pack, parent.file)
         self.parent = parent
         self.datum = datum
         self.json_path = datum.full_path
         self.__data = None
-        self.__dirty = False
-        self.parent.register_resource(self)
         self.name = str(datum.path)
-        self.resources = []
-    
-    @property
-    def data(self):
-        raw_data = self.datum.value
-        if isinstance(raw_data, dict):
-            self.__data = NotifyDict(raw_data, owner=self)
-        if isinstance(raw_data, list):
-            self.__data = NotifyList(raw_data, owner=self)
-
-        return self.__data
-
-    @data.setter
-    def data(self, data):
-        self.__data = data
-
-    @property
-    def dirty(self):
-        return self.__dirty
-    
-    @dirty.setter
-    def dirty(self, dirty):
-        self.__dirty = dirty
-        self.parent.dirty = dirty
+        self.__resources: SubResource = []
+        self.parent.register_resource(self)
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
 
-    def register_resource(self, resource):
-        self.resources.append(resource)
-        
-    def save(self):
-        if self.__dirty:
-            for resource in self.resources:
-                resource.save()
-            self.datum.full_path.update(self.parent.data, self.data)
-            self.__dirty = False
-            self.parent.save()
+    @property
+    def data(self):
+        if self.__data == None:
+            raw_data = self.datum.value
+            if isinstance(raw_data, dict):
+                self.__data = NotifyDict(raw_data, owner=self)
+            if isinstance(raw_data, list):
+                self.__data = NotifyList(raw_data, owner=self)
+        return self.__data
 
+    @data.setter
+    def data(self, data):
+        self.dirty = True
+        self.__data = data
+
+    @property
+    def dirty(self):
+        return self._dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self._dirty = dirty
+        self.parent.dirty = dirty
+
+    def register_resource(self, resource: SubResource) -> None:
+        self.__resources.append(resource)
+        
+    def _save(self):
+        if self._dirty:
+            for resource in self.__resources:
+                resource._save()
+            self.json_path.update(self.parent.data, self.data)
+            self._dirty = False
+            # print("Saving...", self.__class__.__name__, self.name)
 
 class Component(SubResource):
     def __init__(self, entity: JsonResource, group: ComponentGroup, datum: DatumInContext) -> None:
@@ -202,40 +195,43 @@ class ComponentGroup(SubResource):
     def components(self) -> list[Component]:
         component_path = parse("*")
         for match in component_path.find(self.data):
-            self.__components.append(Component(self.parent, self, match))
+            self.__components.append(Component(self, self, match))
         return self.__components
+
         
 class JsonResource(Resource):
     def __init__(self, pack:Pack, file_path:str) -> None:
-        super().__init__(pack, file_path)
-        self.resources = []
+        super().__init__(pack, self)
+        self.file_path = file_path
+        self.__resources = []
         self.pack = pack
-        self.__dirty = False
-        self.data = NotifyDict(self.pack.load_json(self.file_path))
+        self.data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
         self.pack.register_resource(self)
-
-    def register_resource(self, resource):
-        self.resources.append(resource)
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
 
     @property
     def dirty(self):
-        return self.__dirty
+        return self._dirty
     
     @dirty.setter
     def dirty(self, dirty):
-        self.__dirty = dirty
+        self._dirty = dirty
 
-    @Override
+
     def save(self):
         if self.dirty:
             self.dirty = False
-            print("Saving: " + self.file_path)
-            for resource in self.resources:
-                resource.save()
+            for resource in self.__resources:
+                resource._save()
             self.pack.save_json(self.file_path, self.data)
+            self.dirty = False
+            # print("Saving...", self.__class__.__name__, self.file_path)
+
+            
+    def register_resource(self, resource):
+        self.__resources.append(resource)
 
 
 class Manifest(JsonResource):
@@ -385,8 +381,9 @@ class AnimationFileRP(JsonResource):
 
     @cached_property
     def animations(self):
-        for key in self.data.get("animations", {}).keys():
-            self.__animations.append(AnimationRP(self, ["animations"], key))
+        animation_path = parse("animations.*")
+        for match in animation_path.find(self.data):
+            self.__animations.append(AnimationRP(self, match))
         return self.__animations        
             
 class AnimationRP(SubResource):
