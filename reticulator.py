@@ -2,13 +2,10 @@ from __future__ import annotations
 from functools import cached_property
 from jsonpath_ng import *
 from io import TextIOWrapper
-from enum import Enum
 
 import os
 import json
 import glob
-import copy
-import sys
 import traceback
 
 # GLOBALS
