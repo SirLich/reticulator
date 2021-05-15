@@ -8,9 +8,8 @@ import os
 import json
 import glob
 import copy
+import sys
 import traceback
-
-
 
 # GLOBALS
 DEBUG = 0
@@ -32,26 +31,6 @@ def debug() -> None:
         print("Something went wrong...")
     else:
         pass
-
-def print_dict(d) -> None:
-    print(json.dumps(d, indent=2))
-
-def get_nested_json(data: dict, json_path: str) -> dict:
-    temp = copy.deepcopy(data)
-    jsonpath_expr = parse(json_path)
-    results = jsonpath_expr.find(temp)
-    if len(results) > 1:
-        print("Warning! Ambiguous subresource")
-
-    return results[0]
-
-def save_nested_json(data: dict, json_path: str, snippet: dict) -> None:
-    pass
-    # current = data
-    # for key in path:
-    #     current = current[key]
-
-    # current[name] = snippet
 
 def get_json_from_path(path:str) -> dict:
     with open(path, "r") as fh:
@@ -78,9 +57,6 @@ def get_json_from_file(fh:TextIOWrapper, path:str) -> dict:
             print("ERROR loading: " + path)
             return {}
 
-"""
-A dict, which tells its parent when it is edited/saved.
-"""
 class NotifyDict(dict):
     def __init__(self, *args, owner=None, **kwargs):
         self.__owner = owner
@@ -354,19 +330,52 @@ class BehaviorPack(Pack):
                 return entity
         raise AssetNotFoundError
 
-class Model(SubResource):
-    def __init__(self, parent: JsonResource, path: str, name: str) -> None:
-        super().__init__(parent, path, name)
+class Cube(SubResource):
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
 
+class Bone(SubResource):
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
+        self.__cubes = []
+    
+    @cached_property
+    def cubes(self) -> list[Cube]:
+        internal_path = parse("cubes[*]")
+        for match in internal_path.find(self.data):
+            self.__cubes.append(Cube(self, match))
+        return self.__cubes
+
+class Model(SubResource):
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
+        self.__bones = []
+        self.__cubes = []
+    
+    @cached_property
+    def cubes(self) -> list[Cube]:
+        for bone in self.bones:
+            for cube in bone.cubes:
+                self.__cubes.append(cube)
+        return self.__cubes
+
+    @cached_property
+    def bones(self) -> list[Bone]:
+        internal_path = parse("bones.[*]")
+        for match in internal_path.find(self.data):
+            self.__bones.append(Bone(self, match))
+        return self.__bones
+        
 class ModelFile(JsonResource):
     def __init__(self, pack: Pack, file_path) -> None:
         super().__init__(pack, file_path)
         self.__models = []
     
     @cached_property
-    def models(self):
-        for key in self.data.get("minecraft:geometry", []):
-            self.__models.append(Model(self, ["minecraft:geometry"], key))
+    def models(self) -> list[Model]:
+        model_path = parse("'minecraft:geometry'.[*]")
+        for match in model_path.find(self.data):
+            self.__models.append(Model(self, match))
         return self.__models
 
 class AnimationFileRP(JsonResource):
@@ -508,12 +517,17 @@ class ResourcePack(Pack):
 
     @cached_property
     def model_files(self) -> list[ModelFile]:
-        self.__load_model_files()
+        base_directory = os.path.join(self.input_path, "models")
+        for model_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            model_path = os.path.relpath(model_path, self.input_path)
+            self.__model_files.append(ModelFile(self, model_path))
         return self.__model_files
     
     @cached_property
     def models(self) -> list[Model]:
-        self.__load_models()
+        for model_file in self.model_files:
+            for model in model_file.models:
+                self.__models.append(model)   
         return self.__models
 
     # Methods
@@ -522,18 +536,6 @@ class ResourcePack(Pack):
             if entity.identifier == identifier:
                 return entity
         raise AssetNotFoundError 
-
-    # Loaders
-    def __load_models(self) -> None:
-        for model_file in self.model_files:
-            for model in model_file.models:
-                self.__models.append(model)
-
-    def __load_model_files(self) -> None:
-        base_directory = os.path.join(self.input_path, "models")
-        for model_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            model_path = os.path.relpath(model_path, self.input_path)
-            self.__model_files.append(ModelFile(self, model_path))
 
     def __load_animation_files(self) -> None:
         base_directory = os.path.join(self.input_path, "animations")
