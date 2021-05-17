@@ -132,12 +132,16 @@ class Resource():
         raise NotImplementedError 
 
 class JsonResource(Resource):
-    def __init__(self, pack:Pack, file_path:str, data=None) -> None:
+    def __init__(self, pack:Pack = None, file_path:str = None, data=None) -> None:
         super().__init__(pack, self)
-        self.file_path = file_path
-        self.file_name = os.path.basename(file_path)
-        self.__resources = []
         self.pack = pack
+
+        self.file_path = file_path
+
+        if file_path:
+            self.file_name = os.path.basename(file_path)
+
+        self.__resources = []
         self.__mark_for_deletion: bool = False
 
         if data != None:
@@ -145,7 +149,8 @@ class JsonResource(Resource):
         else:
             self.data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
 
-        self.pack.register_resource(self)
+        if pack:
+            self.pack.register_resource(self)
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
@@ -501,8 +506,8 @@ class EntityRP(JsonResource):
 
 
 class EntityBP(JsonResource):
-    def __init__(self, pack, path, data = None):
-        super().__init__(pack, path, data=data)
+    def __init__(self, pack:BehaviorPack = None, file_path:str = None, data = None):
+        super().__init__(pack=pack, file_path=file_path, data=data)
         self.__components = []
         self.__component_groups = []
         self.__events = []
