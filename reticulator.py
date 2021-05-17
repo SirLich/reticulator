@@ -4,6 +4,7 @@ from jsonpath_ng import *
 from io import TextIOWrapper
 from dataclasses import dataclass
 from send2trash import send2trash
+import functools
 
 import os
 import json
@@ -85,10 +86,6 @@ class NotifyDict(dict):
 
         super().__setitem__(attr, value)
 
-
-
-        
-
 class NotifyList(list):
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
@@ -119,7 +116,6 @@ class NotifyList(list):
                 self.__owner.dirty = True
         
         super().__setitem__(attr, value)
-
 
 class Resource():
     def __init__(self, pack: Pack, file: JsonResource) -> None:
@@ -229,9 +225,8 @@ class SubResource(Resource):
             self._dirty = False
 
 class Component(SubResource):
-    def __init__(self, entity: JsonResource, group: ComponentGroup, datum: DatumInContext) -> None:
-        super().__init__(entity, datum)
-        self.entity = entity
+    def __init__(self, parent: JsonResource, group: ComponentGroup, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
         self.group = group
 
 class Event(SubResource):
@@ -343,6 +338,8 @@ class BehaviorPack(Pack):
     def __init__(self, input_path, project=None):
         super().__init__(input_path, project=project)
         self.__entities = []
+        self.__animation_controller_files = []
+        self.__animation_controllers = []
 
     # Properties
     @cached_property
@@ -353,6 +350,22 @@ class BehaviorPack(Pack):
             self.__entities.append(EntityBP(self, entity_path))
             
         return self.__entities
+
+    @cached_property
+    def animation_controller_files(self) -> list[AnimationControllerFile]:
+        directory = os.path.join(self.input_path, "animation_controllers")
+        for path in glob.glob(directory + "/**/*.json", recursive=True):
+            path = os.path.relpath(path, self.input_path)
+            self.__animation_controller_files.append(AnimationControllerFile(self, path))
+            
+        return self.__animation_controller_files
+    
+    @cached_property
+    def animation_controllers(self) -> list[AnimationController]:
+        for acf in self.animation_controller_files:
+            for ac in acf.animation_controllers:
+                self.__animation_controllers.append(ac)
+        return self.__animation_controllers
 
     # Methods
     def get_entity(self, identifier:str) -> EntityBP:
@@ -421,6 +434,18 @@ class ModelFile(JsonResource):
             self.__models.append(Model(self, match))
         return self.__models
 
+class AnimationControllerFile(JsonResource):
+    def __init__(self, pack: Pack, file_path) -> None:
+        super().__init__(pack, file_path)
+        self.__animation_controllers = []
+
+    @cached_property
+    def animation_controllers(self):
+        animation_path = parse("animation_controllers.*")
+        for match in animation_path.find(self.data):
+            self.__animation_controllers.append(AnimationController(self, match))
+        return self.__animation_controllers  
+
 class AnimationFileRP(JsonResource):
     def __init__(self, pack: Pack, file_path) -> None:
         super().__init__(pack, file_path)
@@ -432,7 +457,24 @@ class AnimationFileRP(JsonResource):
         for match in animation_path.find(self.data):
             self.__animations.append(AnimationRP(self, match))
         return self.__animations        
-            
+
+
+class AnimationControllerState(SubResource):
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
+
+class AnimationController(SubResource):
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
+        self.__states = []
+
+    @cached_property
+    def states(self) -> list[AnimationControllerState]:
+        animation_path = parse("states.*")
+        for match in animation_path.find(self.data):
+            self.__states.append(AnimationControllerState(self, match))
+        return self.__states
+
 class AnimationRP(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
@@ -514,6 +556,18 @@ class RpItem(JsonResource):
 class BPItem(JsonResource):
     def __init__(self):
         pass
+
+from functools import wraps
+
+def decorator(argument):
+    def real_decorator(function):
+        @wraps(function)
+        def wrapper(*args, **kwargs):
+            retval = function(*args, **kwargs)
+            return retval
+        return wrapper
+    return real_decorator
+
 
 class ResourcePack(Pack):
     def __init__(self, input_path, project=None):
