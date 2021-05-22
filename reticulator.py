@@ -4,54 +4,24 @@ from jsonpath_ng import *
 from io import TextIOWrapper
 from dataclasses import dataclass
 from send2trash import send2trash
-import functools
 
 import os
 import json
 import glob
-import traceback
 
-# GLOBALS
-DEBUG = 0
-
-# EXCEPTIONS
-class AssetNotFoundError(Exception):
+# Base exception class
+class ReticulatorException(Exception):
     pass
 
-# GLOBALS
+# Called when a "floating" asset attempts to access its parent pack, for example when saving
+class FloatingAssetError(ReticulatorException):
+    pass
 
-def debug() -> None:
-    if DEBUG == 2:
-        print(traceback.format_exc())
-    elif DEBUG == 1:
-        print("Something went wrong...")
-    else:
-        pass
+# Called when attempting to access an asset that does not exist, for example getting an entity by name
+class AssetNotFoundError(ReticulatorException):
+    pass
 
-def get_json_from_path(path:str) -> dict:
-    with open(path, "r") as fh:
-        return get_json_from_file(fh, path)
 
-def get_json_from_file(fh:TextIOWrapper, path:str) -> dict:
-    try:
-        return json.load(fh)
-    except:
-        try:
-            fh.seek(0)
-            contents = ""
-            for line in fh.readlines():
-                cleanedLine = line.split("//", 1)[0]
-                if len(cleanedLine) > 0 and line.endswith("\n") and "\n" not in cleanedLine:
-                    cleanedLine += "\n"
-                contents += cleanedLine
-            while "/*" in contents:
-                preComment, postComment = contents.split("/*", 1)
-                contents = preComment + postComment.split("*/", 1)[1]
-            return json.loads(contents)
-        except Exception as e:
-            print(e)
-            print("ERROR loading: " + path)
-            return {}
 
 #TODO: Add notify string, int, etc
 
@@ -119,9 +89,21 @@ class NotifyList(list):
 
 class Resource():
     def __init__(self, pack: Pack, file: JsonResource) -> None:
+        # Public
         self.pack = pack
         self.file = file
+
+        # Protected
+        self._data = None
         self._dirty = False
+    
+    @property
+    def data(self):
+        raise NotImplementedError
+
+    @data.setter
+    def data(self, data):
+        raise NotImplementedError
 
     @property
     def dirty(self):
@@ -129,10 +111,10 @@ class Resource():
 
     @dirty.setter
     def dirty(self, dirty):
-        raise NotImplementedError 
+        raise NotImplementedError
 
 class JsonResource(Resource):
-    def __init__(self, pack:Pack = None, file_path:str = None, data=None) -> None:
+    def __init__(self, pack:Pack = None, file_path:str = None, data:dict = None) -> None:
         super().__init__(pack, self)
         self.pack = pack
 
@@ -144,16 +126,27 @@ class JsonResource(Resource):
         self.__resources = []
         self.__mark_for_deletion: bool = False
 
+        # The case where data is passed in as an argument
         if data != None:
-            self.data = NotifyDict(data, owner=self)
-        else:
-            self.data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
+            self._data = NotifyDict(data, owner=self)
 
         if pack:
             self.pack.register_resource(self)
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
+
+    @property
+    def data(self):
+        # The case where data was not passed in as an argument
+        if self._data == None:
+            self._data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
+        return self._data
+
+    @data.setter
+    def data(self, data):
+        self.dirty = True
+        self._data = data
 
     @property
     def dirty(self):
@@ -164,6 +157,12 @@ class JsonResource(Resource):
         self._dirty = dirty
 
     def save(self, force=False):
+        # Don't allow saving
+        if not self.pack:
+            raise FloatingAssetError()
+
+        # TODO Should we also delete these files manually from disk?
+        # Do not save files that are marked for deletion
         if self.__mark_for_deletion:
             pass
 
@@ -187,7 +186,6 @@ class SubResource(Resource):
         self.parent = parent
         self.datum = datum
         self.json_path = datum.full_path
-        self.__data = None
         self.id = str(datum.path)
         self.__resources: SubResource = []
         self.parent.register_resource(self)
@@ -197,18 +195,18 @@ class SubResource(Resource):
 
     @property
     def data(self):
-        if self.__data == None:
+        if self._data == None:
             raw_data = self.datum.value
             if isinstance(raw_data, dict):
-                self.__data = NotifyDict(raw_data, owner=self)
+                self._data = NotifyDict(raw_data, owner=self)
             if isinstance(raw_data, list):
-                self.__data = NotifyList(raw_data, owner=self)
-        return self.__data
+                self._data = NotifyList(raw_data, owner=self)
+        return self._data
 
     @data.setter
     def data(self, data):
         self.dirty = True
-        self.__data = data
+        self._data = data
 
     @property
     def dirty(self):
@@ -299,7 +297,7 @@ class Pack():
         return Manifest(self, "manifest.json")
 
     def load_json(self, local_path):
-        return self.__load_json(os.path.join(self.input_path, local_path))
+        return self.get_json_from_path(os.path.join(self.input_path, local_path))
 
     def save_json(self, local_path, data):
         return self.__save_json(os.path.join(self.output_path, local_path), data)
@@ -320,13 +318,31 @@ class Pack():
     def get_entity(self, identifier):
         raise NotImplementedError
         
-    # Static Methods
     @staticmethod
-    def __load_json(file_path):
-        if not os.path.exists(file_path):
-            print("Bad filepath: " + file_path)
-            return {}
-        return get_json_from_path(file_path)
+    def get_json_from_path(path:str) -> dict:
+        with open(path, "r") as fh:
+            return Pack.__get_json_from_file(fh)
+
+    @staticmethod
+    def __get_json_from_file(fh:TextIOWrapper) -> dict:
+        try:
+            return json.load(fh)
+        except:
+            try:
+                fh.seek(0)
+                contents = ""
+                for line in fh.readlines():
+                    cleanedLine = line.split("//", 1)[0]
+                    if len(cleanedLine) > 0 and line.endswith("\n") and "\n" not in cleanedLine:
+                        cleanedLine += "\n"
+                    contents += cleanedLine
+                while "/*" in contents:
+                    preComment, postComment = contents.split("/*", 1)
+                    contents = preComment + postComment.split("*/", 1)[1]
+                return json.loads(contents)
+            except Exception as e:
+                print(e)
+                return {}
     
     @staticmethod
     def __save_json(file_path, data):
