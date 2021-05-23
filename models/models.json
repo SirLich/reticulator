@@ -23,6 +23,15 @@
     ],
     "sub_resources": [
         {
+            "class": "Component",
+            "parameters": [
+                {
+                    "name": "component_group",
+                    "class": "ComponentGroup"
+                }
+            ]
+        },
+        {
             "class": "Event",
             "sub_resources": [
                 {

@@ -3,11 +3,19 @@ import json
 def title_case(text):
     return text.replace("_", " ").title().replace(" ","")
 
+def make_params(children):
+    data = ""
+    for child in children:
+        name = child["name"]
+        data += f"self.{name} = {name}\n        "
+    
+    return data
+
 def make_properties(children):
     data = ""
     for child in children:
         name = child["name"]
-        data += "self.__{} = []".format(name)
+        data += "self.__{} = []\n        ".format(name)
     
     return data
 
@@ -46,29 +54,45 @@ class {class_}(JsonResource):
 
     return data
 
+def make_parameters(model):
+    parameters = model.get("parameters", [])
+    if(len(parameters) == 0):
+        return ""
+    data = ""
+    
+    for param in parameters:
+        data += f", {param['name']}: {param['class']} = None"
+    
+    return data
+
 def make_sub_resource(model):
     class_ = model.get("class")
     children = model.get("sub_resources", [])
+    params = model.get("parameters", [])
 
     return f"""
 class {class_}(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    def __init__(self, parent: JsonResource, datum: DatumInContext{make_parameters(model)}) -> None:
         super().__init__(parent, datum)
+        {make_params(params)}
         {make_properties(children)}
     {make_property_getters(children)}
     """
 
-    return data
+def generate_models(base, models, generated):
+    with open(base, "r") as f:
+        base = f.read()
 
-def generate_models(inc, outc):
-    with open(inc, "r") as f:
+    with open(models, "r") as f:
         data = json.load(f)
 
-    with open(outc, "w") as outfile:
+    with open(generated, "w") as outfile:
+        outfile.write(base)
+
         for model in data["json_resources"]:
             outfile.write(make_json_resource(model))
         
         for model in data["sub_resources"]:
             outfile.write(make_sub_resource(model))
 
-generate_models("models.json", "out.py")
+generate_models("base.py", "models.json", "generated.py")
