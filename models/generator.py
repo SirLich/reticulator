@@ -19,6 +19,22 @@ def make_subrec_attributes(children):
     
     return data
 
+def make_resource_accessor(child):
+    name = child["name"]
+    class_ = child["class"]
+    path = child["path"]
+
+    return f"""
+    @cached_property
+    def {name}(self) -> list[{class_}]:
+        base_directory = os.path.join(self.input_path, "{path}")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__{name}.append({class_}(self, local_path))
+            
+        return self.__{name}
+"""
+
 def make_subrec_accessor(child):
     name = child["name"]
     class_ = child["class"]
@@ -54,12 +70,30 @@ def make_property_accessors(children):
         out += make_property_accessor(child)
     return out
 
+def make_resource_accessors(children):
+    out = ""
+    for child in children:
+        out += make_resource_accessor(child)
+    return out
+
 def make_subrec_accessors(children):
     out = ""
     for child in children:
         out += make_subrec_accessor(child)
     return out
 
+def make_json_pack(model):
+    class_ = model.get("class")
+    children = model.get("json_resources", [])
+
+    return f"""
+class {class_}(Pack):
+    def __init__(self, input_path: str, project: Project = None):
+        super().__init__(input_path, project=project)
+        {make_subrec_attributes(children)}
+    {make_resource_accessors(children)}
+    """
+    
 def make_json_resource(model):
     class_ = model.get("class")
     children = model.get("sub_resources", [])
@@ -111,6 +145,8 @@ def generate_models(base, models, generated):
     with open(generated, "w") as outfile:
         outfile.write(base)
 
+        for model in data["packs"]:
+            outfile.write(make_json_pack(model))
         for model in data["json_resources"]:
             outfile.write(make_json_resource(model))
         

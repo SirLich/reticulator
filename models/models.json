@@ -1,5 +1,58 @@
 {
+    "packs": [
+        {
+            "class": "ResourcePack",
+            "json_resources": [
+                {
+                    "class": "AnimationFileRP",
+                    "name": "animation_files",
+                    "path": "animations"
+                },
+                {
+                    "class": "EntityRP",
+                    "name": "entities",
+                    "path": "entity"
+                },
+                {
+                    "class": "ModelFile",
+                    "name": "model_files",
+                    "path": "models"
+                }
+            ]
+        },
+        {
+            "class": "BehaviorPack",
+            "json_resources": [
+                {
+                    "class": "EntityBP",
+                    "name": "entities",
+                    "path": "entities"
+                },
+                {
+                    "class": "AnimationControllerFile",
+                    "name": "animation_controller_files",
+                    "path": "animation_controllers"
+                }
+            ]
+        }
+    ],
     "json_resources": [
+        {
+            "class": "ItemBP",
+            "properties": [
+                {
+                    "path": "'minecraft:item'.description.identifier",
+                    "name": "identifier"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "class": "Component",
+                    "name": "components",
+                    "path": "$.'minecraft:item'.components"
+                }
+            ]
+        },
         {
             "class": "EntityRP",
             "sub_resources": [

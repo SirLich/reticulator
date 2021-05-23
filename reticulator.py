@@ -5,7 +5,6 @@ from jsonpath_ng import *
 from io import TextIOWrapper
 from dataclasses import dataclass
 from send2trash import send2trash
-
 import os
 import json
 import glob
