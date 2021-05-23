@@ -1,0 +1,56 @@
+{
+    "json_resources": [
+        {
+            "class": "ModelFile",
+            "sub_resources": [
+                {
+                    "class": "Model",
+                    "name": "models",
+                    "path": "'minecraft:geometry'.[*]"
+                }
+            ]
+        },
+        {
+            "class": "AnimationControllerFile",
+            "sub_resources": [
+                {
+                    "class": "AnimationController",
+                    "name": "animation_controllers",
+                    "path": "animation_controllers.*"
+                }
+            ]
+        }
+    ],
+    "sub_resources": [
+        {
+            "class": "Event",
+            "sub_resources": [
+                {
+                    "class": "ComponentGroup",
+                    "name": "groups_to_add",
+                    "path": "add.component_groups.[*]",
+                    "getter": "self.parent.get_component_group(match.value)"
+                },
+                {
+                    "class": "ComponentGroup",
+                    "name": "groups_to_remove",
+                    "path": "remove.component_groups.[*]",
+                    "getter": "self.parent.get_component_group(match.value)"
+                }
+            ]
+        },
+        {
+            "class": "Bone",
+            "sub_resources": [
+                {
+                    "class": "Cube",
+                    "name": "cubes",
+                    "path": "cubes[*]"
+                }
+            ]
+        },
+        {
+            "class": "Cube"
+        }
+    ]
+}

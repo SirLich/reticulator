@@ -1,5 +1,6 @@
 from __future__ import annotations
 from functools import cached_property
+from typing import Any
 from jsonpath_ng import *
 from io import TextIOWrapper
 from dataclasses import dataclass
@@ -97,6 +98,21 @@ class Resource():
         self._data = None
         self._dirty = False
     
+    def set(self, parse_path: str, new_data: Any):
+        json_path = parse(parse_path)
+        json_path.update(self.data, new_data)
+
+    def get(self, parse_path: str):
+        results : list[DatumInContext] = parse(parse_path).find(self.data)
+        # If single, return a single element (or return multiple)
+        if len(results) == 1:
+            return results[0].value
+        else:
+            out_results = []
+            for result in results:
+                out_results.append(result.value)
+            return out_results
+
     @property
     def data(self):
         raise NotImplementedError
@@ -114,7 +130,7 @@ class Resource():
         raise NotImplementedError
 
 class JsonResource(Resource):
-    def __init__(self, pack:Pack = None, file_path:str = None, data:dict = None) -> None:
+    def __init__(self, pack: Pack = None, file_path: str = None, data: dict = None) -> None:
         super().__init__(pack, self)
         self.pack = pack
 
@@ -173,7 +189,6 @@ class JsonResource(Resource):
             self.pack.save_json(self.file_path, self.data)
             self.dirty = False
 
-            
     def register_resource(self, resource):
         self.__resources.append(resource)
     
@@ -224,13 +239,13 @@ class SubResource(Resource):
         if self._dirty or force:
             for resource in self.__resources:
                 resource._save(force=force)
-            self.json_path.update(self.parent.data, self.data)
+            self.json_path.set(self.parent.data, self.data)
             self._dirty = False
 
-class Component(SubResource):
-    def __init__(self, parent: JsonResource, group: ComponentGroup, datum: DatumInContext) -> None:
+class Component(SubResource): 
+    def __init__(self, parent: JsonResource, datum: DatumInContext, component_group: ComponentGroup = None) -> None:
         super().__init__(parent, datum)
-        self.group = group
+        self.group = component_group
 
 class Event(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
@@ -437,14 +452,14 @@ class Model(SubResource):
     
     @property
     def identifier(self):
-        return self.data["description"]["identifier"]
+        return self.get("description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.data["description"]["identifier"] = identifier
+        self.set("description.identifier", identifier)
         
 class ModelFile(JsonResource):
-    def __init__(self, pack: Pack, file_path, data = None) -> None:
+    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
         self.__models = []
     
@@ -531,11 +546,11 @@ class EntityBP(JsonResource):
     # Properties
     @property
     def identifier(self):
-        return self.data["minecraft:entity"]["description"]["identifier"]
+        return self.get("'minecraft:entity'.description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.data["minecraft:entity"]["description"]["identifier"] = identifier
+        self.set("'minecraft:entity'.description.identifier", identifier)
 
     @cached_property
     def events(self) -> list[Event]:
