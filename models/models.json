@@ -1,6 +1,52 @@
 {
     "json_resources": [
         {
+            "class": "EntityRP",
+            "sub_resources": [
+                {
+                    "class": "AnimationRP",
+                    "path": "$.'minecraft:client_entity'.description.animations.*",
+                    "name": "animations"
+                }
+            ]
+        },
+        {
+            "class": "AnimationFileRP",
+            "sub_resources": [
+                {
+                    "class": "AnimationControllerState",
+                    "path": "states.*",
+                    "name": "states"
+                }
+            ]
+        },
+        {
+            "class": "EntityBP",
+            "properties": [
+                {
+                    "path": "'minecraft:entity'.description.identifier",
+                    "name": "identifier"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "class": "ComponentGroup",
+                    "path": "$.'minecraft:entity'.component_groups.*",
+                    "name": "component_groups"
+                },
+                {
+                    "class": "Component",
+                    "path": "$.'minecraft:entity'.component_groups.*",
+                    "name": "components"
+                },
+                {
+                    "class": "Event",
+                    "path": "$.'minecraft:entity'.events.*",
+                    "name": "events"
+                }
+            ]
+        },
+        {
             "class": "ModelFile",
             "sub_resources": [
                 {
@@ -22,6 +68,42 @@
         }
     ],
     "sub_resources": [
+        {
+            "class": "AnimationControllerState"
+        },
+        {
+            "class": "Model",
+            "sub_resources": [
+                {
+                    "class": "Bone",
+                    "path": "bones.[*]",
+                    "name": "bones"
+                }
+            ]
+        },
+        {
+            "class": "AnimationRP"
+        },
+        {
+            "class": "AnimationController",
+            "sub_resources": [
+                {
+                    "class": "AnimationControllerState",
+                    "path": "states.*",
+                    "name": "states"
+                }
+            ]
+        },
+        {
+            "class": "ComponentGroup",
+            "sub_resources": [
+                {
+                    "class": "Component",
+                    "name": "components",
+                    "path": "*"
+                }
+            ]
+        },
         {
             "class": "Component",
             "parameters": [

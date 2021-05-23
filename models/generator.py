@@ -11,7 +11,7 @@ def make_params(children):
     
     return data
 
-def make_properties(children):
+def make_subrec_attributes(children):
     data = ""
     for child in children:
         name = child["name"]
@@ -19,7 +19,7 @@ def make_properties(children):
     
     return data
 
-def make_property_getter(child):
+def make_subrec_accessor(child):
     name = child["name"]
     class_ = child["class"]
     path = child["path"]
@@ -34,22 +34,44 @@ def make_property_getter(child):
         return self.__{name}
 """
 
-def make_property_getters(children):
+def make_property_accessor(child):
+    print(child)
+    name = child["name"]
+    path = child["path"]
+
+    return f"""
+    @property
+    def {name}(self):
+        return self.get("{path}")
+    
+    @{name}.setter
+    def {name}(self, {name}):
+        self.set("{path}", {name})
+""" 
+def make_property_accessors(children):
     out = ""
     for child in children:
-        out += make_property_getter(child)
+        out += make_property_accessor(child)
+    return out
+
+def make_subrec_accessors(children):
+    out = ""
+    for child in children:
+        out += make_subrec_accessor(child)
     return out
 
 def make_json_resource(model):
     class_ = model.get("class")
     children = model.get("sub_resources", [])
+    properties = model.get("properties", [])
 
     data = f"""
 class {class_}(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
-        {make_properties(children)}
-    {make_property_getters(children)}
+        {make_subrec_attributes(children)}
+    {make_property_accessors(properties)}
+    {make_subrec_accessors(children)}
     """
 
     return data
@@ -75,8 +97,8 @@ class {class_}(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext{make_parameters(model)}) -> None:
         super().__init__(parent, datum)
         {make_params(params)}
-        {make_properties(children)}
-    {make_property_getters(children)}
+        {make_subrec_attributes(children)}
+    {make_subrec_accessors(children)}
     """
 
 def generate_models(base, models, generated):

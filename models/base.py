@@ -279,7 +279,6 @@ class Pack():
         self.__project = project
         self.input_path = input_path
         self.output_path = input_path
-        self.manifest = self.__get_manifest()
 
     @cached_property
     def project(self) -> Project:
@@ -287,9 +286,6 @@ class Pack():
 
     def set_output_location(self, output_path: str) -> None:
         self.output_path = output_path
-
-    def __get_manifest(self) -> Manifest:
-        return Manifest(self, "manifest.json")
 
     def load_json(self, local_path):
         return self.get_json_from_path(os.path.join(self.input_path, local_path))
@@ -392,21 +388,6 @@ class BehaviorPack(Pack):
     def create_entity(self, new_path, data = None):
         self.__entities.append(EntityBP(self, os.path.join("entities", new_path), data = data))
 
-class Manifest(JsonResource):
-    def __init__(self, pack, path):
-        super().__init__(pack, path)
-
-    def get_uuid(self):
-        self.data.get("header",{}).get("uuid","")
-    
-    def set_uuid(self, uuid):
-        self.data["header"]["uuid"] = uuid
-
-    def get_dependencies(self):
-        pass
-
-    def __init__(self):
-        pass
 
 class ResourcePack(Pack):
     def __init__(self, input_path, project=None):
