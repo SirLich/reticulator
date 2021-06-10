@@ -11,6 +11,30 @@ def make_params(children):
     
     return data
 
+def make_getter(child):
+    if child.get("getter") == None:
+        return ""
+
+    class_ = child["class"]
+    name = child["name"]
+    getter_name = child["getter"]["name"]
+    property = child["getter"]["property"]
+    
+    return f"""
+    def {getter_name}(self, {property}:str) -> {class_}:
+        for child in self.{name}:
+            if child.{property} == {property}:
+                return child
+        raise AssetNotFoundError 
+"""
+        
+def make_getters(children):
+    out = ""
+    for child in children:
+        out += make_getter(child)
+    return out
+
+
 def make_subrec_attributes(children):
     data = ""
     for child in children:
@@ -82,7 +106,7 @@ def make_subrec_accessors(children):
         out += make_subrec_accessor(child)
     return out
 
-def make_json_pack(model):
+def make_pack(model):
     class_ = model.get("class")
     children = model.get("json_resources", [])
 
@@ -92,6 +116,7 @@ class {class_}(Pack):
         super().__init__(input_path, project=project)
         {make_subrec_attributes(children)}
     {make_resource_accessors(children)}
+    {make_getters(children)}
     """
     
 def make_json_resource(model):
@@ -146,7 +171,7 @@ def generate_models(base, models, generated):
         outfile.write(base)
 
         for model in data["packs"]:
-            outfile.write(make_json_pack(model))
+            outfile.write(make_pack(model))
         for model in data["json_resources"]:
             outfile.write(make_json_resource(model))
         

@@ -373,6 +373,7 @@ class ResourcePack(Pack):
         self.__animation_files = []
         self.__entities = []
         self.__model_files = []
+        self.__items = []
         
     
     @cached_property
@@ -402,20 +403,31 @@ class ResourcePack(Pack):
             
         return self.__model_files
 
+    @cached_property
+    def items(self) -> list[ItemRP]:
+        base_directory = os.path.join(self.input_path, "items")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__items.append(ItemRP(self, local_path))
+            
+        return self.__items
+
+    
     
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
         self.__entities = []
         self.__animation_controller_files = []
+        self.__items = []
         
     
     @cached_property
-    def entities(self) -> list[EntityBP]:
+    def entities(self) -> list[EntityFileBP]:
         base_directory = os.path.join(self.input_path, "entities")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__entities.append(EntityBP(self, local_path))
+            self.__entities.append(EntityFileBP(self, local_path))
             
         return self.__entities
 
@@ -427,6 +439,53 @@ class BehaviorPack(Pack):
             self.__animation_controller_files.append(AnimationControllerFile(self, local_path))
             
         return self.__animation_controller_files
+
+    @cached_property
+    def items(self) -> list[ItemBP]:
+        base_directory = os.path.join(self.input_path, "items")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__items.append(ItemBP(self, local_path))
+            
+        return self.__items
+
+    
+    def get_entity(self, identifier:str) -> EntityFileBP:
+        for child in self.entities:
+            if child.identifier == identifier:
+                return child
+        raise AssetNotFoundError 
+
+    
+class ItemRP(JsonResource):
+    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
+        super().__init__(pack, file_path, data)
+        self.__components = []
+        
+    
+    @property
+    def identifier(self):
+        return self.get("'minecraft:item'.description.identifier")
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        self.set("'minecraft:item'.description.identifier", identifier)
+
+    @property
+    def format_version(self):
+        return self.get("format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        self.set("format_version", format_version)
+
+    
+    @cached_property
+    def components(self) -> list[Component]:
+        internal_path = parse("$.'minecraft:item'.components.*")
+        for match in internal_path.find(self.data):
+            self.__components.append(Component(self, match))
+        return self.__components
 
     
 class ItemBP(JsonResource):
@@ -470,19 +529,27 @@ class EntityRP(JsonResource):
 class AnimationFileRP(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
-        self.__states = []
+        self.__animations = []
         
     
+    @property
+    def format_version(self):
+        return self.get("$.format_version")
     
-    @cached_property
-    def states(self) -> list[AnimationControllerState]:
-        internal_path = parse("states.*")
-        for match in internal_path.find(self.data):
-            self.__states.append(AnimationControllerState(self, match))
-        return self.__states
+    @format_version.setter
+    def format_version(self, format_version):
+        self.set("$.format_version", format_version)
 
     
-class EntityBP(JsonResource):
+    @cached_property
+    def animations(self) -> list[AnimationRP]:
+        internal_path = parse("$.animations.*")
+        for match in internal_path.find(self.data):
+            self.__animations.append(AnimationRP(self, match))
+        return self.__animations
+
+    
+class EntityFileBP(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
         self.__component_groups = []
@@ -491,12 +558,20 @@ class EntityBP(JsonResource):
         
     
     @property
+    def format_version(self):
+        return self.get("$.format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        self.set("$.format_version", format_version)
+
+    @property
     def identifier(self):
-        return self.get("'minecraft:entity'.description.identifier")
+        return self.get("$.'minecraft:entity'.description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("'minecraft:entity'.description.identifier", identifier)
+        self.set("$.'minecraft:entity'.description.identifier", identifier)
 
     
     @cached_property

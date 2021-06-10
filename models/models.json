@@ -17,6 +17,11 @@
                     "class": "ModelFile",
                     "name": "model_files",
                     "path": "models"
+                },
+                {
+                    "class": "ItemRP",
+                    "name": "items",
+                    "path": "items"
                 }
             ]
         },
@@ -24,19 +29,48 @@
             "class": "BehaviorPack",
             "json_resources": [
                 {
-                    "class": "EntityBP",
+                    "class": "EntityFileBP",
                     "name": "entities",
-                    "path": "entities"
+                    "path": "entities",
+                    "getter": {
+                        "name": "get_entity",
+                        "property": "identifier"
+                    }
                 },
                 {
                     "class": "AnimationControllerFile",
                     "name": "animation_controller_files",
                     "path": "animation_controllers"
+                },
+                {
+                    "class": "ItemBP",
+                    "name": "items",
+                    "path": "items"
                 }
             ]
         }
     ],
     "json_resources": [
+        {
+            "class": "ItemRP",
+            "properties": [
+                {
+                    "path": "'minecraft:item'.description.identifier",
+                    "name": "identifier"
+                },
+                {
+                    "path": "format_version",
+                    "name": "format_version"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "class": "Component",
+                    "name": "components",
+                    "path": "$.'minecraft:item'.components.*"
+                }
+            ]
+        },
         {
             "class": "ItemBP",
             "properties": [
@@ -65,19 +99,29 @@
         },
         {
             "class": "AnimationFileRP",
+            "properties": [
+                {
+                    "name": "format_version",
+                    "path": "$.format_version"
+                }
+            ],
             "sub_resources": [
                 {
-                    "class": "AnimationControllerState",
-                    "path": "states.*",
-                    "name": "states"
+                    "class": "AnimationRP",
+                    "path": "$.animations.*",
+                    "name": "animations"
                 }
             ]
         },
         {
-            "class": "EntityBP",
+            "class": "EntityFileBP",
             "properties": [
                 {
-                    "path": "'minecraft:entity'.description.identifier",
+                    "path": "$.format_version",
+                    "name": "format_version"
+                },
+                {
+                    "path": "$.'minecraft:entity'.description.identifier",
                     "name": "identifier"
                 }
             ],
