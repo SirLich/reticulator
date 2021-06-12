@@ -62,7 +62,7 @@ def make_resource_accessor(child):
 def make_subrec_accessor(child):
     name = child["name"]
     class_ = child["class"]
-    path = child["path"]
+    path = child["json_path"]
     getter = child.get("getter_argument", f"{class_}(self, match)")
 
     return f"""
@@ -75,9 +75,8 @@ def make_subrec_accessor(child):
 """
 
 def make_property_accessor(child):
-    print(child)
     name = child["name"]
-    path = child["path"]
+    path = child["json_path"]
 
     return f"""
     @property
@@ -131,12 +130,13 @@ class {class_}(JsonResource):
         {make_subrec_attributes(children)}
     {make_property_accessors(properties)}
     {make_subrec_accessors(children)}
+    {make_getters(children)}
     """
 
     return data
 
-def make_parameters(model):
-    parameters = model.get("parameters", [])
+def make_params(model):
+    parameters = model.get("optional_parameters", [])
     if(len(parameters) == 0):
         return ""
     data = ""
@@ -150,14 +150,17 @@ def make_sub_resource(model):
     class_ = model.get("class")
     children = model.get("sub_resources", [])
     params = model.get("parameters", [])
+    properties = model.get("properties", [])
 
     return f"""
 class {class_}(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext{make_parameters(model)}) -> None:
+    def __init__(self, parent: JsonResource, datum: DatumInContext{make_params(model)}) -> None:
         super().__init__(parent, datum)
         {make_parameters(params)}
         {make_subrec_attributes(children)}
     {make_subrec_accessors(children)}
+    {make_property_accessors(properties)}
+    {make_getters(children)}
     """
 
 def generate(base, models, generated):

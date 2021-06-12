@@ -10,7 +10,7 @@
                     "file_path": "animations"
                 },
                 {
-                    "class": "EntityRP",
+                    "class": "EntityFileRP",
                     "name": "entities",
                     "file_path": "entity"
                 },
@@ -20,7 +20,7 @@
                     "file_path": "models"
                 },
                 {
-                    "class": "ItemRP",
+                    "class": "ItemFileRP",
                     "name": "items",
                     "file_path": "items"
                 }
@@ -29,6 +29,24 @@
         {
             "class": "BehaviorPack",
             "json_resources": [
+                {
+                    "class": "SpawnRuleFile",
+                    "name": "spawn_rules",
+                    "file_path": "spawn_rules",
+                    "getter": {
+                        "name": "get_spawn_rule",
+                        "property": "identifier"
+                    }
+                },
+                {
+                    "class": "RecipeFile",
+                    "name": "recipes",
+                    "file_path": "recipes",
+                    "getter": {
+                        "name": "get_recipe",
+                        "property": "identifier"
+                    }
+                },
                 {
                     "class": "EntityFileBP",
                     "name": "entities",
@@ -44,7 +62,12 @@
                     "file_path": "animation_controllers"
                 },
                 {
-                    "class": "ItemBP",
+                    "class": "LootTableFile",
+                    "name": "loot_tables",
+                    "file_path": "loot_tables"
+                },
+                {
+                    "class": "ItemFileBP",
                     "name": "items",
                     "file_path": "items"
                 }
@@ -53,14 +76,50 @@
     ],
     "json_resources": [
         {
-            "class": "ItemRP",
+            "class": "RecipeFile",
             "properties": [
                 {
-                    "path": "'minecraft:item'.description.identifier",
+                    "name": "identifier",
+                    "json_path": "$.('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier"
+                },
+                {
+                    "name": "format_version",
+                    "json_path": "$.format_version"
+                }
+            ]
+        },
+        {
+            "class": "SpawnRuleFile",
+            "properties": [
+                {
+                    "name": "identifier",
+                    "json_path": "$.'minecraft:spawn_rules.description'.identifier"
+                },
+                {
+                    "name": "format_version",
+                    "json_path": "$.format_version"
+                }
+            ]
+        },
+        {
+            "class": "LootTableFile",
+            "sub_resources": [
+                {
+                    "class": "LootTablePool",
+                    "name": "pools",
+                    "json_path": "$.pools.[*]"
+                }
+            ]
+        },
+        {
+            "class": "ItemFileRP",
+            "properties": [
+                {
+                    "json_path": "'minecraft:item'.description.identifier",
                     "name": "identifier"
                 },
                 {
-                    "path": "format_version",
+                    "json_path": "format_version",
                     "name": "format_version"
                 }
             ],
@@ -68,15 +127,15 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "path": "$.'minecraft:item'.components.*"
+                    "json_path": "$.'minecraft:item'.components.*"
                 }
             ]
         },
         {
-            "class": "ItemBP",
+            "class": "ItemFileBP",
             "properties": [
                 {
-                    "path": "'minecraft:item'.description.identifier",
+                    "json_path": "'minecraft:item'.description.identifier",
                     "name": "identifier"
                 }
             ],
@@ -84,16 +143,16 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "path": "$.'minecraft:item'.components"
+                    "json_path": "$.'minecraft:item'.components"
                 }
             ]
         },
         {
-            "class": "EntityRP",
+            "class": "EntityFileRP",
             "sub_resources": [
                 {
                     "class": "AnimationRP",
-                    "path": "$.'minecraft:client_entity'.description.animations.*",
+                    "json_path": "$.'minecraft:client_entity'.description.animations.*",
                     "name": "animations"
                 }
             ]
@@ -103,13 +162,13 @@
             "properties": [
                 {
                     "name": "format_version",
-                    "path": "$.format_version"
+                    "json_path": "$.format_version"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "AnimationRP",
-                    "path": "$.animations.*",
+                    "json_path": "$.animations.*",
                     "name": "animations"
                 }
             ]
@@ -118,28 +177,32 @@
             "class": "EntityFileBP",
             "properties": [
                 {
-                    "path": "$.format_version",
+                    "json_path": "$.format_version",
                     "name": "format_version"
                 },
                 {
-                    "path": "$.'minecraft:entity'.description.identifier",
+                    "json_path": "$.'minecraft:entity'.description.identifier",
                     "name": "identifier"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "ComponentGroup",
-                    "path": "$.'minecraft:entity'.component_groups.*",
+                    "json_path": "$.'minecraft:entity'.component_groups.*",
                     "name": "component_groups"
                 },
                 {
                     "class": "Component",
-                    "path": "$.'minecraft:entity'.component_groups.*",
-                    "name": "components"
+                    "json_path": "$.'minecraft:entity'.components.*",
+                    "name": "components",
+                    "getter": {
+                        "name": "get_component",
+                        "property": "id"
+                    }
                 },
                 {
                     "class": "Event",
-                    "path": "$.'minecraft:entity'.events.*",
+                    "json_path": "$.'minecraft:entity'.events.*",
                     "name": "events"
                 }
             ]
@@ -150,7 +213,7 @@
                 {
                     "class": "Model",
                     "name": "models",
-                    "path": "'minecraft:geometry'.[*]"
+                    "json_path": "'minecraft:geometry'.[*]"
                 }
             ]
         },
@@ -160,12 +223,15 @@
                 {
                     "class": "AnimationController",
                     "name": "animation_controllers",
-                    "path": "animation_controllers.*"
+                    "json_path": "animation_controllers.*"
                 }
             ]
         }
     ],
     "sub_resources": [
+        {
+            "class": "LootTablePool"
+        },
         {
             "class": "AnimationControllerState"
         },
@@ -174,7 +240,7 @@
             "sub_resources": [
                 {
                     "class": "Bone",
-                    "path": "bones.[*]",
+                    "json_path": "bones.[*]",
                     "name": "bones"
                 }
             ]
@@ -187,7 +253,7 @@
             "sub_resources": [
                 {
                     "class": "AnimationControllerState",
-                    "path": "states.*",
+                    "json_path": "states.*",
                     "name": "states"
                 }
             ]
@@ -198,13 +264,13 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "path": "*"
+                    "json_path": "*"
                 }
             ]
         },
         {
             "class": "Component",
-            "parameters": [
+            "optional_parameters": [
                 {
                     "name": "component_group",
                     "class": "ComponentGroup"
@@ -217,13 +283,13 @@
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_add",
-                    "path": "add.component_groups.[*]",
+                    "json_path": "add.component_groups.[*]",
                     "getter_argument": "self.parent.get_component_group(match.value)"
                 },
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_remove",
-                    "path": "remove.component_groups.[*]",
+                    "json_path": "remove.component_groups.[*]",
                     "getter_argument": "self.parent.get_component_group(match.value)"
                 }
             ]
@@ -234,7 +300,7 @@
                 {
                     "class": "Cube",
                     "name": "cubes",
-                    "path": "cubes[*]"
+                    "json_path": "cubes[*]"
                 }
             ]
         },
