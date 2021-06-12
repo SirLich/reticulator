@@ -3,13 +3,13 @@ import json
 def title_case(text):
     return text.replace("_", " ").title().replace(" ","")
 
-def make_params(children):
-    data = ""
+def make_parameters(children):
+    out = ""
     for child in children:
         name = child["name"]
-        data += f"self.{name} = {name}\n        "
+        out += f"self.{name} = {name}\n        "
     
-    return data
+    return out
 
 def make_getter(child):
     if child.get("getter") == None:
@@ -46,7 +46,7 @@ def make_subrec_attributes(children):
 def make_resource_accessor(child):
     name = child["name"]
     class_ = child["class"]
-    path = child["path"]
+    path = child["file_path"]
 
     return f"""
     @cached_property
@@ -63,7 +63,7 @@ def make_subrec_accessor(child):
     name = child["name"]
     class_ = child["class"]
     path = child["path"]
-    getter = child.get("getter", f"{class_}(self, match)")
+    getter = child.get("getter_argument", f"{class_}(self, match)")
 
     return f"""
     @cached_property
@@ -155,27 +155,32 @@ def make_sub_resource(model):
 class {class_}(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext{make_parameters(model)}) -> None:
         super().__init__(parent, datum)
-        {make_params(params)}
+        {make_parameters(params)}
         {make_subrec_attributes(children)}
     {make_subrec_accessors(children)}
     """
 
-def generate_models(base, models, generated):
+def generate(base, models, generated):
     with open(base, "r") as f:
         base = f.read()
 
     with open(models, "r") as f:
         data = json.load(f)
 
+    # Write to the output file, 
     with open(generated, "w") as outfile:
         outfile.write(base)
 
         for model in data["packs"]:
             outfile.write(make_pack(model))
+
         for model in data["json_resources"]:
             outfile.write(make_json_resource(model))
         
         for model in data["sub_resources"]:
             outfile.write(make_sub_resource(model))
 
-generate_models("base.py", "models.json", "generated.py")
+def main():
+    generate("base.py", "models.json", "generated.py")
+
+main()

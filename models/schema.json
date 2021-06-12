@@ -1,0 +1,62 @@
+{
+    "$id": "reticulator.models",
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Reticulator Models",
+    "type": "object",
+    "properties": {
+        "packs": {
+            "$ref": "#/lib/packs"
+        },
+        "json_resources": {
+            "$ref": "#/lib/j_resources"
+        }
+    },
+    "lib": {
+        "j_resources": {
+
+        },
+        "packs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "class": {
+                        "type": "string",
+                        "description": "The class that will be used. Should be child of Pack",
+                        "examples": [
+                            "ResourcePack"
+                        ]
+                    },
+                    "json_resources": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/lib/json_resource"
+                        }
+                    }
+                }
+            }
+        },
+        "json_resource": {
+            "type": "object",
+            "properties": {
+                "class": {
+                    "type": "string",
+                    "description": "The class that will be used. Should be child of JsonResource"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "The name of the accessor. Should be plural, and pack-type does not need to be stated."
+                },
+                "file_path": {
+                    "type": "string",
+                    "description": "The file-path to access the resources from."
+                }
+            },
+            "required": [
+                "class",
+                "name",
+                "file_path"
+            ]
+        }
+    }
+}

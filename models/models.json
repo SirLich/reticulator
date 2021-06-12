@@ -1,4 +1,5 @@
 {
+    "$schema": "./schema.json",
     "packs": [
         {
             "class": "ResourcePack",
@@ -6,22 +7,22 @@
                 {
                     "class": "AnimationFileRP",
                     "name": "animation_files",
-                    "path": "animations"
+                    "file_path": "animations"
                 },
                 {
                     "class": "EntityRP",
                     "name": "entities",
-                    "path": "entity"
+                    "file_path": "entity"
                 },
                 {
                     "class": "ModelFile",
                     "name": "model_files",
-                    "path": "models"
+                    "file_path": "models"
                 },
                 {
                     "class": "ItemRP",
                     "name": "items",
-                    "path": "items"
+                    "file_path": "items"
                 }
             ]
         },
@@ -31,7 +32,7 @@
                 {
                     "class": "EntityFileBP",
                     "name": "entities",
-                    "path": "entities",
+                    "file_path": "entities",
                     "getter": {
                         "name": "get_entity",
                         "property": "identifier"
@@ -40,12 +41,12 @@
                 {
                     "class": "AnimationControllerFile",
                     "name": "animation_controller_files",
-                    "path": "animation_controllers"
+                    "file_path": "animation_controllers"
                 },
                 {
                     "class": "ItemBP",
                     "name": "items",
-                    "path": "items"
+                    "file_path": "items"
                 }
             ]
         }
@@ -217,13 +218,13 @@
                     "class": "ComponentGroup",
                     "name": "groups_to_add",
                     "path": "add.component_groups.[*]",
-                    "getter": "self.parent.get_component_group(match.value)"
+                    "getter_argument": "self.parent.get_component_group(match.value)"
                 },
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_remove",
                     "path": "remove.component_groups.[*]",
-                    "getter": "self.parent.get_component_group(match.value)"
+                    "getter_argument": "self.parent.get_component_group(match.value)"
                 }
             ]
         },
