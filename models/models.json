@@ -237,6 +237,12 @@
         },
         {
             "class": "Model",
+            "properties": [
+                {
+                    "name": "identifier",
+                    "json_path": "$.description.identifier"
+                }
+            ],
             "sub_resources": [
                 {
                     "class": "Bone",

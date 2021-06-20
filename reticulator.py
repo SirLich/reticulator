@@ -3,29 +3,31 @@ from functools import cached_property
 from typing import Any
 from jsonpath_ng import *
 from io import TextIOWrapper
-from dataclasses import dataclass
 from send2trash import send2trash
 import os
 import json
 import glob
 
-# Base exception class
 class ReticulatorException(Exception):
+    """Base exception class"""
     pass
 
-# Called when a "floating" asset attempts to access its parent pack, for example when saving
 class FloatingAssetError(ReticulatorException):
+    """Raised when a "floating" asset attempts to access its parent pack, for example when saving."""
     pass
 
-# Called when attempting to access an asset that does not exist, for example getting an entity by name
 class AssetNotFoundError(ReticulatorException):
+    """Raised when attempting to access an asset that does not exist, for example getting an entity by name."""
     pass
-
-
 
 #TODO: Add notify string, int, etc
 
 class NotifyDict(dict):
+    """
+    A dictionary which can notify its owner when it has been edited.
+
+    NotifyDicts are created from dicts, and the process of converting children is recursive.
+    """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
 
@@ -36,7 +38,6 @@ class NotifyDict(dict):
                 if isinstance(value, list):
                     args[0][key] = NotifyList(value, owner=self.__owner)
         super().__init__(*args, **kwargs)
-
 
     def get_item(self, attr):
         try:
@@ -57,6 +58,11 @@ class NotifyDict(dict):
         super().__setitem__(attr, value)
 
 class NotifyList(list):
+    """
+    A list which can notify its owner when it has been edited.
+
+    NotifyList are created from lists, and the process of converting children is recursive.
+    """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
 
@@ -88,7 +94,10 @@ class NotifyList(list):
         super().__setitem__(attr, value)
 
 class Resource():
-    def __init__(self, pack: Pack, file: JsonResource) -> None:
+    """
+    Resource parent class should be used for any child resource that contains json data.
+    """
+    def __init__(self, pack: Pack, file: JsonFileResource) -> None:
         # Public
         self.pack = pack
         self.file = file
@@ -97,11 +106,11 @@ class Resource():
         self._data = None
         self._dirty = False
     
-    def set(self, parse_path: str, new_data: Any):
+    def set_json(self, parse_path: str, new_data: Any):
         json_path = parse(parse_path)
         json_path.update(self.data, new_data)
 
-    def get(self, parse_path: str):
+    def get_json(self, parse_path: str):
         results : list[DatumInContext] = parse(parse_path).find(self.data)
         # If single, return a single element (or return multiple)
         if len(results) == 1:
@@ -128,7 +137,14 @@ class Resource():
     def dirty(self, dirty):
         raise NotImplementedError
 
-class JsonResource(Resource):
+class JsonFileResource(Resource):
+    """
+    JsonFileResource should be used as parent class of any json-files on the system, such as `entity.json`.
+
+    Contains concept of:
+     - File path, where resource will be saved/read
+     - Children resources, which represent "chunks" of the files resources.
+    """
     def __init__(self, pack: Pack = None, file_path: str = None, data: dict = None) -> None:
         super().__init__(pack, self)
         self.pack = pack
@@ -172,16 +188,17 @@ class JsonResource(Resource):
         self._dirty = dirty
 
     def save(self, force=False):
-        # Don't allow saving
+        # Don't allow saving if the asset doesn't have a pack!
         if not self.pack:
             raise FloatingAssetError()
 
         # TODO Should we also delete these files manually from disk?
         # Do not save files that are marked for deletion
         if self.__mark_for_deletion:
-            pass
+            return
 
-        elif self.dirty or force:
+        # Save dirty files, or forced files
+        if self.dirty or force:
             self.dirty = False
             for resource in self.__resources:
                 resource._save(force=force)
@@ -195,6 +212,16 @@ class JsonResource(Resource):
         self.__mark_for_deletion = True
 
 class SubResource(Resource):
+    """
+    SubResource represents a "chunk" of a parents json, which can be any resource.
+
+    For example, a 'Component' is a SubResource of an 'EntityFileBP', while also being a SubResource of 
+    a 'ComponentGroup'.
+
+    Contains concept of:
+     - json_path, which is the local-path in the parent resource where the SubResource exists.
+     - child resources, which contain further granularity for breaking down json
+    """
     def __init__(self, parent: Resource, datum: DatumInContext) -> None:
         super().__init__(parent.pack, parent.file)
         self.parent = parent
@@ -242,12 +269,18 @@ class SubResource(Resource):
             self._dirty = False
 
 class Component(SubResource): 
-    def __init__(self, parent: JsonResource, datum: DatumInContext, component_group: ComponentGroup = None) -> None:
+    """
+    Represents a Component in a BP entity file. Example: 'minecraft:scale'
+    """
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext, component_group: ComponentGroup = None) -> None:
         super().__init__(parent, datum)
         self.group = component_group
 
 class Event(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    """
+    Represents an Event in a BP entity file. Example: 'minecraft:entity_spawned'
+    """
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         self.__groups_to_remove = []
         self.__groups_to_add = []
@@ -267,7 +300,10 @@ class Event(SubResource):
         return self.__groups_to_remove
 
 class ComponentGroup(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    """
+    Represents a ComponentGroup in a BP entity file. Example: 'minecraft:baby'
+    """
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         self.__components = []
     
@@ -278,8 +314,8 @@ class ComponentGroup(SubResource):
             self.__components.append(Component(self, self, match))
         return self.__components
 
-
-class Manifest(JsonResource):
+# TODO Fix this
+class Manifest(JsonFileResource):
     def __init__(self, pack, path):
         super().__init__(pack, path)
 
@@ -292,7 +328,16 @@ class Manifest(JsonResource):
     def get_dependencies(self):
         pass
 
+# TODO clean up implementation of saving/loading json
+# TODO clean up manifest 
 class Pack():
+    """
+    Represents a Pack, which is a folder of JsonFileResources
+
+    Contains concept of:
+     - Input path, where data is read
+     - Output path, where data is saved
+    """
     def __init__(self, input_path: str, project=None):
         self.resources = []
         self.__project = project
@@ -370,6 +415,11 @@ class Pack():
 
 
 class BehaviorPack(Pack):
+    """
+    Represents a behavior pack in MC
+
+    Contains lots of child json-file resources
+    """
     def __init__(self, input_path, project=None):
         super().__init__(input_path, project=project)
         self.__entities = []
@@ -414,11 +464,17 @@ class BehaviorPack(Pack):
 
 
 class Cube(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    """
+    Represents a Cube in a Bone
+    """
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
 
 class Bone(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    """
+    Represents a Bone in a Model
+    """
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         self.__cubes = []
     
@@ -430,7 +486,10 @@ class Bone(SubResource):
         return self.__cubes
 
 class Model(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    """
+    Represents a Model in a ModelFile
+    """
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         self.__bones = []
         self.__cubes = []
@@ -451,13 +510,18 @@ class Model(SubResource):
     
     @property
     def identifier(self):
-        return self.get("description.identifier")
+        return self.get_json("description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("description.identifier", identifier)
+        self.set_json("description.identifier", identifier)
         
-class ModelFile(JsonResource):
+class ModelFile(JsonFileResource):
+    """
+    Represents a the file where Models are stored. Since model files can contain
+    multiple models, this abstraction is required. Mostly used as a pass-through
+    wrapper for accessing model SubResources.
+    """
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
         self.__models = []
@@ -469,7 +533,12 @@ class ModelFile(JsonResource):
             self.__models.append(Model(self, match))
         return self.__models
 
-class AnimationControllerFile(JsonResource):
+class AnimationControllerFile(JsonFileResource):
+    """
+    Represents a the file where AnimationControllers are stored. Since ac files can contain
+    multiple controllers, this abstraction is required. Mostly used as a pass-through
+    wrapper for accessing animation controller SubResources.
+    """
     def __init__(self, pack: Pack, file_path) -> None:
         super().__init__(pack, file_path)
         self.__animation_controllers = []
@@ -481,7 +550,7 @@ class AnimationControllerFile(JsonResource):
             self.__animation_controllers.append(AnimationController(self, match))
         return self.__animation_controllers  
 
-class AnimationFileRP(JsonResource):
+class AnimationFileRP(JsonFileResource):
     def __init__(self, pack: Pack, file_path) -> None:
         super().__init__(pack, file_path)
         self.__animations = []
@@ -495,11 +564,11 @@ class AnimationFileRP(JsonResource):
 
 
 class AnimationControllerState(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
 
 class AnimationController(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         self.__states = []
 
@@ -511,10 +580,10 @@ class AnimationController(SubResource):
         return self.__states
 
 class AnimationRP(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+    def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
 
-class EntityRP(JsonResource):
+class EntityRP(JsonFileResource):
     def __init__(self, pack, path):
         super().__init__(pack, path)
         self.__animations = []
@@ -535,7 +604,7 @@ class EntityRP(JsonResource):
         return self.__animations
 
 
-class EntityBP(JsonResource):
+class EntityBP(JsonFileResource):
     def __init__(self, pack:BehaviorPack = None, file_path:str = None, data = None):
         super().__init__(pack=pack, file_path=file_path, data=data)
         self.__components = []
@@ -545,11 +614,11 @@ class EntityBP(JsonResource):
     # Properties
     @property
     def identifier(self):
-        return self.get("'minecraft:entity'.description.identifier")
+        return self.get_json("'minecraft:entity'.description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("'minecraft:entity'.description.identifier", identifier)
+        self.set_json("'minecraft:entity'.description.identifier", identifier)
 
     @cached_property
     def events(self) -> list[Event]:
@@ -584,11 +653,11 @@ class EntityBP(JsonResource):
                 return component
         raise AssetNotFoundError        
 
-class RpItem(JsonResource):
+class RpItem(JsonFileResource):
     def __init__(self):
         pass
 
-class BPItem(JsonResource):
+class BPItem(JsonFileResource):
     def __init__(self):
         pass
 
@@ -669,6 +738,11 @@ class ResourcePack(Pack):
         return new_model_file
 
 class Project():
+    """
+    A project is used to load/handle an entire Bedrock Addon.
+
+    Currently, only packs with a single RP and single BP are supported.
+    """
     def __init__(self, behavior_path: str, resource_path: str):
         self.__behavior_path = behavior_path
         self.__resource_path = resource_path
@@ -689,6 +763,7 @@ class Project():
         self.__behavior_pack.save(force=force)
         self.__resource_pack.save(force=force)
 
+# TODO what to do here?
 class Reticulator():
     def __init__(self, username=None):
         self.username = username if username != None else os.getlogin()
@@ -721,6 +796,7 @@ class Reticulator():
     def get_behavior_packs(self):
         pass
 
+# TODO write proper tests
 def _test():
     assert 1 == 1
 

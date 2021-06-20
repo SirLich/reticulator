@@ -1,7 +1,9 @@
 from __future__ import annotations
 from functools import cached_property
 from typing import Any
-from jsonpath_ng import *
+from jsonpath_ng import jsonpath
+from jsonpath_ng.ext import parse
+
 from io import TextIOWrapper
 from dataclasses import dataclass
 from send2trash import send2trash
@@ -413,6 +415,12 @@ class ResourcePack(Pack):
         return self.__items
 
     
+    def get_model(self, identifier:str) -> ModelFile:
+        for child in self.model_files:
+            if child.identifier == identifier:
+                return child
+        raise AssetNotFoundError 
+
     
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
@@ -722,7 +730,8 @@ class ModelFile(JsonResource):
     
     @cached_property
     def models(self) -> list[Model]:
-        internal_path = parse("'minecraft:geometry'.[*]")
+        # internal_path = parse("$[?(@.bones)]")
+        internal_path = parse("$.'geometry.squid'")
         for match in internal_path.find(self.data):
             self.__models.append(Model(self, match))
         return self.__models
@@ -778,6 +787,14 @@ class Model(SubResource):
         return self.__bones
 
     
+    @property
+    def identifier(self):
+        return self.get("$.description.identifier")
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        self.set("$.description.identifier", identifier)
+
     
     
 class AnimationRP(SubResource):

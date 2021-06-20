@@ -18,15 +18,29 @@ def make_getter(child):
     class_ = child["class"]
     name = child["name"]
     getter_name = child["getter"]["name"]
-    property = child["getter"]["property"]
-    
-    return f"""
-    def {getter_name}(self, {property}:str) -> {class_}:
+    prop = child["getter"]["property"]
+    from_child = child["getter"].get("from_child")
+
+    if from_child:
+        return (
+    f"""
+    def {getter_name}(self, {prop}:str) -> {class_}:
+        for file_child in self.{name}:
+            for child in file_child:
+                if child.{prop} == {prop}:
+                    return child
+        raise AssetNotFoundError
+""")
+
+    else:
+        return (
+    f"""
+    def {getter_name}(self, {prop}:str) -> {class_}:
         for child in self.{name}:
-            if child.{property} == {property}:
+            if child.{prop} == {prop}:
                 return child
         raise AssetNotFoundError 
-"""
+""")
         
 def make_getters(children):
     out = ""
