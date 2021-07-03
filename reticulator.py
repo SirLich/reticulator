@@ -1,7 +1,12 @@
+""" A pack-access library for Minecraft Bedrock.
+
+Useful for interacting with Bedrock Addons in a programatic way.
+"""
+
 from __future__ import annotations
 from functools import cached_property
 from typing import Any
-from jsonpath_ng import *
+from jsonpath_ng import parse, DatumInContext
 from io import TextIOWrapper
 from send2trash import send2trash
 import os
@@ -9,24 +14,19 @@ import json
 import glob
 
 class ReticulatorException(Exception):
-    """Base exception class"""
-    pass
+    """Base Reticulator exception class."""
 
 class FloatingAssetError(ReticulatorException):
-    """Raised when a "floating" asset attempts to access its parent pack, for example when saving."""
-    pass
+    """Raised when a 'floating asset' attempts to access its parent pack."""
 
 class AssetNotFoundError(ReticulatorException):
-    """Raised when attempting to access an asset that does not exist, for example getting an entity by name."""
-    pass
-
-#TODO: Add notify string, int, etc
+    """Raised when attempting to access an asset that does not exist"""
 
 class NotifyDict(dict):
-    """
-    A dictionary which can notify its owner when it has been edited.
+    """A dictionary which can notify its owner when it has been edited.
 
-    NotifyDicts are created from dicts, and the process of converting children is recursive.
+    NotifyDicts are created from dicts, and the process of converting 
+    children is recursive.
     """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
@@ -107,10 +107,16 @@ class Resource():
         self._dirty = False
     
     def set_json(self, parse_path: str, new_data: Any):
+        """
+        Updates json data based on a jsonpath path, and some data.
+        """
         json_path = parse(parse_path)
         json_path.update(self.data, new_data)
 
     def get_json(self, parse_path: str):
+        """
+        Fetches arbitrary data based on jsonpath path.
+        """
         results : list[DatumInContext] = parse(parse_path).find(self.data)
         # If single, return a single element (or return multiple)
         if len(results) == 1:
@@ -192,7 +198,7 @@ class JsonFileResource(Resource):
         if not self.pack:
             raise FloatingAssetError()
 
-        # TODO Should we also delete these files manually from disk?
+        #TODO Should we also delete these files manually from disk?
         # Do not save files that are marked for deletion
         if self.__mark_for_deletion:
             return
@@ -314,22 +320,19 @@ class ComponentGroup(SubResource):
             self.__components.append(Component(self, self, match))
         return self.__components
 
-# TODO Fix this
 class Manifest(JsonFileResource):
-    def __init__(self, pack, path):
-        super().__init__(pack, path)
-
-    def get_uuid(self):
-        self.data.get("header",{}).get("uuid","")
+    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
+        super().__init__(pack, file_path, data)
     
-    def set_uuid(self, uuid):
-        self.data["header"]["uuid"] = uuid
+    @property
+    def uuid(self):
+        return self.get_json("header.uuid")
+    
+    @uuid.setter
+    def uuid(self, uuid: str):
+        self.set_json("header.uuid", uuid)
 
-    def get_dependencies(self):
-        pass
-
-# TODO clean up implementation of saving/loading json
-# TODO clean up manifest 
+#TODO clean up implementation of saving/loading json
 class Pack():
     """
     Represents a Pack, which is a folder of JsonFileResources
@@ -343,16 +346,16 @@ class Pack():
         self.__project = project
         self.input_path = input_path
         self.output_path = input_path
-        self.manifest = self.__get_manifest()
 
     @cached_property
-    def project(self) -> Project:
+    def project(self) -> ReticulatorProject:
         return self.__project
 
     def set_output_location(self, output_path: str) -> None:
         self.output_path = output_path
 
-    def __get_manifest(self) -> Manifest:
+    @cached_property
+    def manifest(self) -> Manifest:
         return Manifest(self, "manifest.json")
 
     def load_json(self, local_path):
@@ -413,7 +416,6 @@ class Pack():
         with open(file_path, "w+") as f:
             return json.dump(data, f, indent=2)
 
-
 class BehaviorPack(Pack):
     """
     Represents a behavior pack in MC
@@ -461,7 +463,6 @@ class BehaviorPack(Pack):
 
     def create_entity(self, new_path, data = None):
         self.__entities.append(EntityBP(self, os.path.join("entities", new_path), data = data))
-
 
 class Cube(SubResource):
     """
@@ -562,7 +563,6 @@ class AnimationFileRP(JsonFileResource):
             self.__animations.append(AnimationRP(self, match))
         return self.__animations        
 
-
 class AnimationControllerState(SubResource):
     def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
@@ -583,18 +583,26 @@ class AnimationRP(SubResource):
     def __init__(self, parent: JsonFileResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
 
-class EntityRP(JsonFileResource):
+class EntityFileRP(JsonFileResource):
     def __init__(self, pack, path):
         super().__init__(pack, path)
         self.__animations = []
     
     @property
     def identifier(self):
-        return self.data["minecraft:client_entity"]["description"]["identifier"]
+        return self.get_json("$.'minecraft:client_entity'.description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.data["minecraft:client_entity"]["description"]["identifier"] = identifier
+        return self.set_json("$.'minecraft:client_entity'.description.identifier", identifier)
+
+    @property
+    def format_version(self):
+        return self.get_json("$.format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_json("$.format_version", format_version)
 
     @cached_property
     def animations(self) -> list[AnimationRP]:
@@ -602,7 +610,6 @@ class EntityRP(JsonFileResource):
         for match in animation_path.find(self.data):
             self.__animations.append(AnimationRP(self, match))
         return self.__animations
-
 
 class EntityBP(JsonFileResource):
     def __init__(self, pack:BehaviorPack = None, file_path:str = None, data = None):
@@ -653,25 +660,13 @@ class EntityBP(JsonFileResource):
                 return component
         raise AssetNotFoundError        
 
-class RpItem(JsonFileResource):
+class ItemFileRP(JsonFileResource):
     def __init__(self):
         pass
 
-class BPItem(JsonFileResource):
+class ItemFileBP(JsonFileResource):
     def __init__(self):
         pass
-
-from functools import wraps
-
-def decorator(argument):
-    def real_decorator(function):
-        @wraps(function)
-        def wrapper(*args, **kwargs):
-            retval = function(*args, **kwargs)
-            return retval
-        return wrapper
-    return real_decorator
-
 
 class ResourcePack(Pack):
     def __init__(self, input_path, project=None):
@@ -698,11 +693,11 @@ class ResourcePack(Pack):
         return self.__animation_files
 
     @cached_property
-    def entities(self) -> list[EntityRP]:
+    def entities(self) -> list[EntityFileRP]:
         base_directory = os.path.join(self.input_path, "entity")
         for entity_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             entity_path = os.path.relpath(entity_path, self.input_path)
-            self.__entities.append(EntityRP(self, entity_path))
+            self.__entities.append(EntityFileRP(self, entity_path))
         return self.__entities
 
     @cached_property
@@ -720,7 +715,7 @@ class ResourcePack(Pack):
                 self.__models.append(model)   
         return self.__models
 
-    def get_entity(self, identifier:str) -> EntityRP:
+    def get_entity(self, identifier:str) -> EntityFileRP:
         for entity in self.entities:
             if entity.identifier == identifier:
                 return entity
@@ -737,7 +732,7 @@ class ResourcePack(Pack):
         self.__model_files.append(new_model_file)
         return new_model_file
 
-class Project():
+class ReticulatorProject():
     """
     A project is used to load/handle an entire Bedrock Addon.
 
@@ -763,40 +758,7 @@ class Project():
         self.__behavior_pack.save(force=force)
         self.__resource_pack.save(force=force)
 
-# TODO what to do here?
-class Reticulator():
-    def __init__(self, username=None):
-        self.username = username if username != None else os.getlogin()
-        self.com_mojang_path = "C:\\Users\\{}\\AppData\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang".format(username)
-
-    def load_project_from_path(self, input_path) -> Project:
-        return Project(input_path)
-
-    def load_behavior_pack_from_path(self, input_path) -> BehaviorPack:
-        return BehaviorPack(input_path)
-    
-    def load_behavior_pack_from_folder_name(self, pack_name):
-        search_location = os.path.join(self.com_mojang_path, "development_behavior_packs");
-        for dir_name in os.listdir(search_location):
-            if dir_name == pack_name:
-                return self.load_behavior_pack_from_path(os.path.join(search_location, dir_name))
-
-    def load_behavior_pack_from_name(self):
-        pass
-
-    def load_behavior_pack_from_uuid(self):
-        pass
-
-    def load_resource_pack_from_path(self, input_path):
-        return ResourcePack(input_path)
-
-    def get_resource_packs(self):
-        pass
-
-    def get_behavior_packs(self):
-        pass
-
-# TODO write proper tests
+#TODO write proper tests
 def _test():
     assert 1 == 1
 

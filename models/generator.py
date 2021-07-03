@@ -1,3 +1,4 @@
+"""Generator class for building Reticulator, based on some input structures."""
 import json
 
 def title_case(text):
@@ -10,6 +11,41 @@ def make_parameters(children):
         out += f"self.{name} = {name}\n        "
     
     return out
+
+def convert_json_path_to_list(path: str):
+    path = path.replace("'", "")
+    elements = path.split('.')
+    out = ""
+    for element in elements:
+        if element != "$" and element != "":
+            out += f"['{element}']"
+    return out + "[name]"
+
+    
+
+def make_creator(child):
+    """Generate code-block for creating sub-resources"""
+    if child.get("creator") == None:
+        return ""
+
+    class_ = child["class"]
+    name = child["name"]
+    creator_name = child["creator"]["name"]
+    path = child['creator']['path']
+
+    return (
+    f"""
+    def {creator_name}(self, name: str, data: dict) -> {class_}:
+        self.data{convert_json_path_to_list(path)} = data
+        internal_path = parse(f"{path}.'{{name}}'")
+        matches = internal_path.find(self.data)
+        if len(matches) < 0:
+            raise AmbiguousSearchPath
+        match = matches[0]
+        new_object = {class_}(self, match)
+        self.__{name}.append(new_object)
+        return new_object
+""")
 
 def make_getter(child):
     if child.get("getter") == None:
@@ -41,7 +77,13 @@ def make_getter(child):
                 return child
         raise AssetNotFoundError 
 """)
-        
+
+def make_creators(children):
+    out = ""
+    for child in children:
+        out += make_creator(child)
+    return out
+
 def make_getters(children):
     out = ""
     for child in children:
@@ -145,6 +187,7 @@ class {class_}(JsonResource):
     {make_property_accessors(properties)}
     {make_subrec_accessors(children)}
     {make_getters(children)}
+    {make_creators(children)}
     """
 
     return data
@@ -175,6 +218,7 @@ class {class_}(SubResource):
     {make_subrec_accessors(children)}
     {make_property_accessors(properties)}
     {make_getters(children)}
+    {make_creators(children)}
     """
 
 def generate(base, models, generated):

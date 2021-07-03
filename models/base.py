@@ -23,6 +23,10 @@ class FloatingAssetError(ReticulatorException):
 class AssetNotFoundError(ReticulatorException):
     pass
 
+# Called when a path is not unique
+class AmbiguousSearchPath(ReticulatorException):
+    pass
+
 #TODO: Add notify string, int, etc
 
 class NotifyDict(dict):
@@ -270,8 +274,11 @@ class SubResource(Resource):
         if self._dirty or force:
             for resource in self.__resources:
                 resource._save(force=force)
-            self.json_path.set(self.parent.data, self.data)
+            self.json_path.update(self.parent.data, self.data)
             self._dirty = False
+
+    def delete(self):
+        self.json_path.filter(lambda d: True, self.parent.data)
 
 class Pack():
     def __init__(self, input_path: str, project=None):

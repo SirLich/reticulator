@@ -1,9 +1,7 @@
 from __future__ import annotations
 from functools import cached_property
 from typing import Any
-from jsonpath_ng import jsonpath
-from jsonpath_ng.ext import parse
-
+from jsonpath_ng import *
 from io import TextIOWrapper
 from dataclasses import dataclass
 from send2trash import send2trash
@@ -23,6 +21,10 @@ class FloatingAssetError(ReticulatorException):
 
 # Called when attempting to access an asset that does not exist, for example getting an entity by name
 class AssetNotFoundError(ReticulatorException):
+    pass
+
+# Called when a path is not unique
+class AmbiguousSearchPath(ReticulatorException):
     pass
 
 #TODO: Add notify string, int, etc
@@ -272,8 +274,11 @@ class SubResource(Resource):
         if self._dirty or force:
             for resource in self.__resources:
                 resource._save(force=force)
-            self.json_path.set(self.parent.data, self.data)
+            self.json_path.update(self.parent.data, self.data)
             self._dirty = False
+
+    def delete(self):
+        self.json_path.filter(lambda d: True, self.parent.data)
 
 class Pack():
     def __init__(self, input_path: str, project=None):
@@ -415,12 +420,6 @@ class ResourcePack(Pack):
         return self.__items
 
     
-    def get_model(self, identifier:str) -> ModelFile:
-        for child in self.model_files:
-            if child.identifier == identifier:
-                return child
-        raise AssetNotFoundError 
-
     
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
@@ -531,6 +530,7 @@ class RecipeFile(JsonResource):
     
     
     
+    
 class SpawnRuleFile(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
@@ -555,6 +555,7 @@ class SpawnRuleFile(JsonResource):
     
     
     
+    
 class LootTableFile(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
@@ -569,6 +570,7 @@ class LootTableFile(JsonResource):
             self.__pools.append(LootTablePool(self, match))
         return self.__pools
 
+    
     
     
 class ItemFileRP(JsonResource):
@@ -603,6 +605,7 @@ class ItemFileRP(JsonResource):
 
     
     
+    
 class ItemFileBP(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
@@ -627,6 +630,7 @@ class ItemFileBP(JsonResource):
 
     
     
+    
 class EntityFileRP(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
@@ -641,6 +645,7 @@ class EntityFileRP(JsonResource):
             self.__animations.append(AnimationRP(self, match))
         return self.__animations
 
+    
     
     
 class AnimationFileRP(JsonResource):
@@ -665,6 +670,7 @@ class AnimationFileRP(JsonResource):
             self.__animations.append(AnimationRP(self, match))
         return self.__animations
 
+    
     
     
 class EntityFileBP(JsonResource):
@@ -714,11 +720,40 @@ class EntityFileBP(JsonResource):
         return self.__events
 
     
+    def get_component_group(self, id:str) -> ComponentGroup:
+        for child in self.component_groups:
+            if child.id == id:
+                return child
+        raise AssetNotFoundError 
+
     def get_component(self, id:str) -> Component:
         for child in self.components:
             if child.id == id:
                 return child
         raise AssetNotFoundError 
+
+    
+    def create_component_group(self, name: str, data: dict) -> ComponentGroup:
+        self.data['minecraft:entity']['component_groups'][name] = data
+        internal_path = parse(f"$.'minecraft:entity'.component_groups.'{name}'")
+        matches = internal_path.find(self.data)
+        if len(matches) < 0:
+            raise AmbiguousSearchPath
+        match = matches[0]
+        new_object = ComponentGroup(self, match)
+        self.__component_groups.append(new_object)
+        return new_object
+
+    def create_component(self, name: str, data: dict) -> Component:
+        self.data['minecraft:entity']['components'][name] = data
+        internal_path = parse(f"$.'minecraft:entity'.components.'{name}'")
+        matches = internal_path.find(self.data)
+        if len(matches) < 0:
+            raise AmbiguousSearchPath
+        match = matches[0]
+        new_object = Component(self, match)
+        self.__components.append(new_object)
+        return new_object
 
     
 class ModelFile(JsonResource):
@@ -730,12 +765,12 @@ class ModelFile(JsonResource):
     
     @cached_property
     def models(self) -> list[Model]:
-        # internal_path = parse("$[?(@.bones)]")
-        internal_path = parse("$.'geometry.squid'")
+        internal_path = parse("'minecraft:geometry'.[*]")
         for match in internal_path.find(self.data):
             self.__models.append(Model(self, match))
         return self.__models
 
+    
     
     
 class AnimationControllerFile(JsonResource):
@@ -754,6 +789,7 @@ class AnimationControllerFile(JsonResource):
 
     
     
+    
 class LootTablePool(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
@@ -763,11 +799,13 @@ class LootTablePool(SubResource):
     
     
     
+    
 class AnimationControllerState(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         
         
+    
     
     
     
@@ -797,11 +835,13 @@ class Model(SubResource):
 
     
     
+    
 class AnimationRP(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         
         
+    
     
     
     
@@ -823,6 +863,7 @@ class AnimationController(SubResource):
     
     
     
+    
 class ComponentGroup(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
@@ -840,11 +881,24 @@ class ComponentGroup(SubResource):
     
     
     
+    def create_component(self, name: str, data: dict) -> Component:
+        self.data[name] = data
+        internal_path = parse(f"$.'{name}'")
+        matches = internal_path.find(self.data)
+        if len(matches) < 0:
+            raise AmbiguousSearchPath
+        match = matches[0]
+        new_object = Component(self, match)
+        self.__components.append(new_object)
+        return new_object
+
+    
 class Component(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext, component_group: ComponentGroup = None) -> None:
         super().__init__(parent, datum)
         
         
+    
     
     
     
@@ -874,6 +928,7 @@ class Event(SubResource):
     
     
     
+    
 class Bone(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
@@ -891,11 +946,13 @@ class Bone(SubResource):
     
     
     
+    
 class Cube(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
         super().__init__(parent, datum)
         
         
+    
     
     
     

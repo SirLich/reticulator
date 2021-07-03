@@ -189,7 +189,15 @@
                 {
                     "class": "ComponentGroup",
                     "json_path": "$.'minecraft:entity'.component_groups.*",
-                    "name": "component_groups"
+                    "name": "component_groups",
+                    "getter": {
+                        "name": "get_component_group",
+                        "property": "id"
+                    },
+                    "creator": {
+                        "name": "create_component_group",
+                        "path": "$.'minecraft:entity'.component_groups"
+                    }
                 },
                 {
                     "class": "Component",
@@ -198,6 +206,10 @@
                     "getter": {
                         "name": "get_component",
                         "property": "id"
+                    },
+                    "creator": {
+                        "name": "create_component",
+                        "path": "$.'minecraft:entity'.components"
                     }
                 },
                 {
@@ -270,7 +282,11 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "json_path": "*"
+                    "json_path": "*",
+                    "creator": {
+                        "name": "create_component",
+                        "path": "$"
+                    }
                 }
             ]
         },
