@@ -47,8 +47,15 @@ class NotifyDict(dict):
             return self.__getitem__(attr)
         except:
             return None
-        
+    
+    def __delitem__(self, v) -> None:
+        print("DELETING")
+        if(self.__owner != None):
+            self.__owner.dirty = True
+        return super().__delitem__(v)
+
     def __setitem__(self, attr, value):
+        print("setting!")
         if isinstance(value, dict):
             value = NotifyDict(value, owner=self.__owner)
         if isinstance(value, list):
@@ -278,6 +285,7 @@ class SubResource(Resource):
             self._dirty = False
 
     def delete(self):
+        self.parent.dirty = True
         self.json_path.filter(lambda d: True, self.parent.data)
 
 class Pack():
