@@ -53,6 +53,12 @@
                         "items": {
                             "$ref": "#/definitions/child_json_resource"
                         }
+                    },
+                    "pack_sub_resources": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/pack_sub_resource"
+                        }
                     }
                 },
                 "required": [
@@ -103,6 +109,23 @@
                 "json_path"
             ]
         },
+        "pack_sub_resource": {
+            "type": "object",
+            "properties": {
+                "class": {
+                    "type": "string",
+                    "description": "The class that will be used. Should be a child of SubResource.\nExample: AnimationControllerRP"
+                },
+                "from_child": {
+                    "type": "string",
+                    "description": "The JsonResource attribute that will be searched.\nExample: animation_controller_files."
+                },
+                "name": {
+                    "type": "string",
+                    "description": "The name of the accessor, and by extension, the name of the attribute, in the child.\nExample:animation_controllers"
+                }
+            }
+        },
         "child_json_resource": {
             "type": "object",
             "properties": {
@@ -120,6 +143,9 @@
                 },
                 "getter": {
                     "$ref": "#/definitions/getter"
+                },
+                "creator": {
+                    "$ref": "#/definitions/creator"
                 }
             },
             "required": [
@@ -138,6 +164,15 @@
                 "property": {
                     "type": "string",
                     "description": "The property that will be used to filter for the child. Should exist on the child resource."
+                }
+            }
+        },
+        "creator": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the creator, such as create_entity."
                 }
             }
         }

@@ -3,7 +3,23 @@
     "packs": [
         {
             "class": "ResourcePack",
+            "sub_resources": [
+                {
+                    "class": "AnimationControllerRP",
+                    "name": "animation_controllers",
+                    "from_child": "animation_controller_files"
+                }
+            ],
             "json_resources": [
+                {
+                    "class": "AnimationControllerFileRP",
+                    "name": "animation_controller_files",
+                    "file_path": "animation_controllers",
+                    "getter": {
+                        "name": "get_animation_controller_file",
+                        "property": "file_name"
+                    }
+                },
                 {
                     "class": "AnimationFileRP",
                     "name": "animation_files",
@@ -15,9 +31,14 @@
                     "file_path": "entity"
                 },
                 {
-                    "class": "ModelFile",
+                    "class": "ModelFileRP",
                     "name": "model_files",
                     "file_path": "models"
+                },
+                {
+                    "class": "RenderControllerFileRP",
+                    "name": "render_controllers",
+                    "file_path": "render_controllers"
                 },
                 {
                     "class": "ItemFileRP",
@@ -75,6 +96,20 @@
         }
     ],
     "json_resources": [
+        {
+            "class": "AnimationControllerFileRP",
+            "sub_resources": [
+                {
+                    "class": "AnimationControllerRP",
+                    "name": "animation_controllers",
+                    "json_path": "$.animation_controllers.*",
+                    "getter": {
+                        "name": "get_animation_controller",
+                        "property": "id"
+                    }
+                }
+            ]
+        },
         {
             "class": "RecipeFile",
             "properties": [
@@ -195,8 +230,7 @@
                         "property": "id"
                     },
                     "creator": {
-                        "name": "create_component_group",
-                        "path": "$.'minecraft:entity'.component_groups"
+                        "name": "create_component_group"
                     }
                 },
                 {
@@ -208,8 +242,7 @@
                         "property": "id"
                     },
                     "creator": {
-                        "name": "create_component",
-                        "path": "$.'minecraft:entity'.components"
+                        "name": "create_component"
                     }
                 },
                 {
@@ -220,7 +253,7 @@
             ]
         },
         {
-            "class": "ModelFile",
+            "class": "ModelFileRP",
             "sub_resources": [
                 {
                     "class": "Model",
@@ -241,6 +274,9 @@
         }
     ],
     "sub_resources": [
+        {
+            "class": "AnimationControllerRP"
+        },
         {
             "class": "LootTablePool"
         },
@@ -305,14 +341,12 @@
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_add",
-                    "json_path": "add.component_groups.[*]",
-                    "getter_argument": "self.parent.get_component_group(match.value)"
+                    "json_path": "add.component_groups.[*]"
                 },
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_remove",
-                    "json_path": "remove.component_groups.[*]",
-                    "getter_argument": "self.parent.get_component_group(match.value)"
+                    "json_path": "remove.component_groups.[*]"
                 }
             ]
         },

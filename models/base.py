@@ -3,9 +3,7 @@ from functools import cached_property
 from typing import Any
 from jsonpath_ng import *
 from io import TextIOWrapper
-from dataclasses import dataclass
 from send2trash import send2trash
-from functools import wraps
 
 import os
 import json
@@ -24,10 +22,8 @@ class AssetNotFoundError(ReticulatorException):
     pass
 
 # Called when a path is not unique
-class AmbiguousSearchPath(ReticulatorException):
+class AmbiguousAssetError(ReticulatorException):
     pass
-
-#TODO: Add notify string, int, etc
 
 class NotifyDict(dict):
     def __init__(self, *args, owner: Resource = None, **kwargs):
@@ -49,13 +45,11 @@ class NotifyDict(dict):
             return None
     
     def __delitem__(self, v) -> None:
-        print("DELETING")
         if(self.__owner != None):
             self.__owner.dirty = True
         return super().__delitem__(v)
 
     def __setitem__(self, attr, value):
-        print("setting!")
         if isinstance(value, dict):
             value = NotifyDict(value, owner=self.__owner)
         if isinstance(value, list):
@@ -285,6 +279,7 @@ class SubResource(Resource):
             self._dirty = False
 
     def delete(self):
+        self.parent.dirty = True
         self.json_path.filter(lambda d: True, self.parent.data)
 
 class Pack():

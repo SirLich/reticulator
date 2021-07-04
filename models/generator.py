@@ -17,21 +17,21 @@ def convert_json_path_to_list(path: str):
     elements = path.split('.')
     out = ""
     for element in elements:
-        if element != "$" and element != "":
+        if element != "$" and element != "" and element != "*":
             out += f"['{element}']"
     return out + "[name]"
 
-    
 
 def make_creator(child):
     """Generate code-block for creating sub-resources"""
-    if child.get("creator") == None:
+    if child.get("creator") is None:
         return ""
 
     class_ = child["class"]
     name = child["name"]
     creator_name = child["creator"]["name"]
-    path = child['creator']['path']
+    path = child['json_path']
+    path = path.rstrip('.*')
 
     return (
     f"""
@@ -39,8 +39,11 @@ def make_creator(child):
         self.data{convert_json_path_to_list(path)} = data
         internal_path = parse(f"{path}.'{{name}}'")
         matches = internal_path.find(self.data)
-        if len(matches) < 0:
-            raise AmbiguousSearchPath
+        if len(matches) > 1:
+            raise AmbiguousAssetError(internal_path)
+        
+        if len(matches) == 0:
+            raise AssetNotFoundError(name)
         match = matches[0]
         new_object = {class_}(self, match)
         self.__{name}.append(new_object)
@@ -48,14 +51,16 @@ def make_creator(child):
 """)
 
 def make_getter(child):
-    if child.get("getter") == None:
+    if child.get("getter") is None:
         return ""
 
-    class_ = child["class"]
+    getter = child["getter"]
+
+    class_ = getter.get("class", child["class"])
     name = child["name"]
-    getter_name = child["getter"]["name"]
-    prop = child["getter"]["property"]
-    from_child = child["getter"].get("from_child")
+    getter_name = getter["name"]
+    prop = getter["property"]
+    from_child = getter.get("from_child")
 
     if from_child:
         return (
@@ -75,7 +80,7 @@ def make_getter(child):
         for child in self.{name}:
             if child.{prop} == {prop}:
                 return child
-        raise AssetNotFoundError 
+        raise AssetNotFoundError({prop})
 """)
 
 def make_creators(children):
@@ -90,14 +95,30 @@ def make_getters(children):
         out += make_getter(child)
     return out
 
-
-def make_subrec_attributes(children):
+def make_attributes(children):
     data = ""
+
     for child in children:
         name = child["name"]
         data += "self.__{} = []\n        ".format(name)
     
+
     return data
+
+def make_grandchild_accessor(child):
+    name = child["name"]
+    class_ = child["class"]
+    from_child = child["from_child"]
+
+    return f"""
+    @cached_property
+    def {name}(self) -> list[{class_}]:
+        children = []
+        for file in self.{from_child}:
+            for child in file.{name}:
+                children.append(child)
+        return children
+"""
 
 def make_resource_accessor(child):
     name = child["name"]
@@ -149,6 +170,12 @@ def make_property_accessors(children):
         out += make_property_accessor(child)
     return out
 
+def make_grandchild_accessors(children):
+    out = ""
+    for child in children:
+        out += make_grandchild_accessor(child)
+    return out
+
 def make_resource_accessors(children):
     out = ""
     for child in children:
@@ -164,13 +191,15 @@ def make_subrec_accessors(children):
 def make_pack(model):
     class_ = model.get("class")
     children = model.get("json_resources", [])
+    grand_children = model.get("sub_resources", [])
 
     return f"""
 class {class_}(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
-        {make_subrec_attributes(children)}
+        {make_attributes(children)}
     {make_resource_accessors(children)}
+    {make_grandchild_accessors(grand_children)}
     {make_getters(children)}
     """
     
@@ -183,7 +212,7 @@ def make_json_resource(model):
 class {class_}(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
-        {make_subrec_attributes(children)}
+        {make_attributes(children)}
     {make_property_accessors(properties)}
     {make_subrec_accessors(children)}
     {make_getters(children)}
@@ -214,7 +243,7 @@ class {class_}(SubResource):
     def __init__(self, parent: JsonResource, datum: DatumInContext{make_params(model)}) -> None:
         super().__init__(parent, datum)
         {make_parameters(params)}
-        {make_subrec_attributes(children)}
+        {make_attributes(children)}
     {make_subrec_accessors(children)}
     {make_property_accessors(properties)}
     {make_getters(children)}

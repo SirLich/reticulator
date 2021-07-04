@@ -3,9 +3,7 @@ from functools import cached_property
 from typing import Any
 from jsonpath_ng import *
 from io import TextIOWrapper
-from dataclasses import dataclass
 from send2trash import send2trash
-from functools import wraps
 
 import os
 import json
@@ -24,10 +22,8 @@ class AssetNotFoundError(ReticulatorException):
     pass
 
 # Called when a path is not unique
-class AmbiguousSearchPath(ReticulatorException):
+class AmbiguousAssetError(ReticulatorException):
     pass
-
-#TODO: Add notify string, int, etc
 
 class NotifyDict(dict):
     def __init__(self, *args, owner: Resource = None, **kwargs):
@@ -49,13 +45,11 @@ class NotifyDict(dict):
             return None
     
     def __delitem__(self, v) -> None:
-        print("DELETING")
         if(self.__owner != None):
             self.__owner.dirty = True
         return super().__delitem__(v)
 
     def __setitem__(self, attr, value):
-        print("setting!")
         if isinstance(value, dict):
             value = NotifyDict(value, owner=self.__owner)
         if isinstance(value, list):
@@ -385,12 +379,23 @@ class Project():
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
+        self.__animation_controller_files = []
         self.__animation_files = []
         self.__entities = []
         self.__model_files = []
+        self.__render_controllers = []
         self.__items = []
         
     
+    @cached_property
+    def animation_controller_files(self) -> list[AnimationControllerFileRP]:
+        base_directory = os.path.join(self.input_path, "animation_controllers")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__animation_controller_files.append(AnimationControllerFileRP(self, local_path))
+            
+        return self.__animation_controller_files
+
     @cached_property
     def animation_files(self) -> list[AnimationFileRP]:
         base_directory = os.path.join(self.input_path, "animations")
@@ -410,13 +415,22 @@ class ResourcePack(Pack):
         return self.__entities
 
     @cached_property
-    def model_files(self) -> list[ModelFile]:
+    def model_files(self) -> list[ModelFileRP]:
         base_directory = os.path.join(self.input_path, "models")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__model_files.append(ModelFile(self, local_path))
+            self.__model_files.append(ModelFileRP(self, local_path))
             
         return self.__model_files
+
+    @cached_property
+    def render_controllers(self) -> list[RenderControllerFileRP]:
+        base_directory = os.path.join(self.input_path, "render_controllers")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__render_controllers.append(RenderControllerFileRP(self, local_path))
+            
+        return self.__render_controllers
 
     @cached_property
     def items(self) -> list[ItemFileRP]:
@@ -428,6 +442,21 @@ class ResourcePack(Pack):
         return self.__items
 
     
+    @cached_property
+    def animation_controllers(self) -> list[AnimationControllerRP]:
+        children = []
+        for file in self.animation_controller_files:
+            for child in file.animation_controllers:
+                children.append(child)
+        return children
+
+    
+    def get_animation_controller_file(self, file_name:str) -> AnimationControllerFileRP:
+        for child in self.animation_controller_files:
+            if child.file_name == file_name:
+                return child
+        raise AssetNotFoundError(file_name)
+
     
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
@@ -495,24 +524,48 @@ class BehaviorPack(Pack):
         return self.__items
 
     
+    
     def get_spawn_rule(self, identifier:str) -> SpawnRuleFile:
         for child in self.spawn_rules:
             if child.identifier == identifier:
                 return child
-        raise AssetNotFoundError 
+        raise AssetNotFoundError(identifier)
 
     def get_recipe(self, identifier:str) -> RecipeFile:
         for child in self.recipes:
             if child.identifier == identifier:
                 return child
-        raise AssetNotFoundError 
+        raise AssetNotFoundError(identifier)
 
     def get_entity(self, identifier:str) -> EntityFileBP:
         for child in self.entities:
             if child.identifier == identifier:
                 return child
-        raise AssetNotFoundError 
+        raise AssetNotFoundError(identifier)
 
+    
+class AnimationControllerFileRP(JsonResource):
+    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
+        super().__init__(pack, file_path, data)
+        self.__animation_controllers = []
+        
+    
+    
+    @cached_property
+    def animation_controllers(self) -> list[AnimationControllerRP]:
+        internal_path = parse("$.animation_controllers.*")
+        for match in internal_path.find(self.data):
+            self.__animation_controllers.append(AnimationControllerRP(self, match))
+        return self.__animation_controllers
+
+    
+    def get_animation_controller(self, id:str) -> AnimationControllerRP:
+        for child in self.animation_controllers:
+            if child.id == id:
+                return child
+        raise AssetNotFoundError(id)
+
+    
     
 class RecipeFile(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
@@ -732,21 +785,24 @@ class EntityFileBP(JsonResource):
         for child in self.component_groups:
             if child.id == id:
                 return child
-        raise AssetNotFoundError 
+        raise AssetNotFoundError(id)
 
     def get_component(self, id:str) -> Component:
         for child in self.components:
             if child.id == id:
                 return child
-        raise AssetNotFoundError 
+        raise AssetNotFoundError(id)
 
     
     def create_component_group(self, name: str, data: dict) -> ComponentGroup:
         self.data['minecraft:entity']['component_groups'][name] = data
         internal_path = parse(f"$.'minecraft:entity'.component_groups.'{name}'")
         matches = internal_path.find(self.data)
-        if len(matches) < 0:
-            raise AmbiguousSearchPath
+        if len(matches) > 1:
+            raise AmbiguousAssetError(internal_path)
+        
+        if len(matches) == 0:
+            raise AssetNotFoundError(name)
         match = matches[0]
         new_object = ComponentGroup(self, match)
         self.__component_groups.append(new_object)
@@ -756,15 +812,18 @@ class EntityFileBP(JsonResource):
         self.data['minecraft:entity']['components'][name] = data
         internal_path = parse(f"$.'minecraft:entity'.components.'{name}'")
         matches = internal_path.find(self.data)
-        if len(matches) < 0:
-            raise AmbiguousSearchPath
+        if len(matches) > 1:
+            raise AmbiguousAssetError(internal_path)
+        
+        if len(matches) == 0:
+            raise AssetNotFoundError(name)
         match = matches[0]
         new_object = Component(self, match)
         self.__components.append(new_object)
         return new_object
 
     
-class ModelFile(JsonResource):
+class ModelFileRP(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
         super().__init__(pack, file_path, data)
         self.__models = []
@@ -795,6 +854,16 @@ class AnimationControllerFile(JsonResource):
             self.__animation_controllers.append(AnimationController(self, match))
         return self.__animation_controllers
 
+    
+    
+    
+class AnimationControllerRP(SubResource):
+    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
+        super().__init__(parent, datum)
+        
+        
+    
+    
     
     
     
@@ -891,10 +960,13 @@ class ComponentGroup(SubResource):
     
     def create_component(self, name: str, data: dict) -> Component:
         self.data[name] = data
-        internal_path = parse(f"$.'{name}'")
+        internal_path = parse(f".'{name}'")
         matches = internal_path.find(self.data)
-        if len(matches) < 0:
-            raise AmbiguousSearchPath
+        if len(matches) > 1:
+            raise AmbiguousAssetError(internal_path)
+        
+        if len(matches) == 0:
+            raise AssetNotFoundError(name)
         match = matches[0]
         new_object = Component(self, match)
         self.__components.append(new_object)
@@ -923,14 +995,14 @@ class Event(SubResource):
     def groups_to_add(self) -> list[ComponentGroup]:
         internal_path = parse("add.component_groups.[*]")
         for match in internal_path.find(self.data):
-            self.__groups_to_add.append(self.parent.get_component_group(match.value))
+            self.__groups_to_add.append(ComponentGroup(self, match))
         return self.__groups_to_add
 
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
         internal_path = parse("remove.component_groups.[*]")
         for match in internal_path.find(self.data):
-            self.__groups_to_remove.append(self.parent.get_component_group(match.value))
+            self.__groups_to_remove.append(ComponentGroup(self, match))
         return self.__groups_to_remove
 
     
