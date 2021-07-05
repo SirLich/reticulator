@@ -7,7 +7,11 @@
                 {
                     "class": "AnimationControllerRP",
                     "name": "animation_controllers",
-                    "from_child": "animation_controller_files"
+                    "from_child": "animation_controller_files",
+                    "getter": {
+                        "name": "get_animation_controller",
+                        "property": "id"
+                    }
                 }
             ],
             "json_resources": [

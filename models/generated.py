@@ -458,6 +458,14 @@ class ResourcePack(Pack):
         raise AssetNotFoundError(file_name)
 
     
+    def get_animation_controller(self, id:str) -> AnimationControllerRP:
+        for file_child in self.animation_controller_files:
+            for child in file_child.animation_controllers:
+                if child.id == id:
+                    return child
+        raise AssetNotFoundError(id)
+
+    
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
@@ -543,6 +551,7 @@ class BehaviorPack(Pack):
                 return child
         raise AssetNotFoundError(identifier)
 
+    
     
 class AnimationControllerFileRP(JsonResource):
     def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:

@@ -50,6 +50,28 @@ def make_creator(child):
         return new_object
 """)
 
+def make_grandchild_getter(child):
+    if child.get("getter") is None:
+        return ""
+
+    getter = child["getter"]
+
+    class_ = getter.get("class", child["class"])
+    name = child["name"]
+    getter_name = getter["name"]
+    prop = getter["property"]
+    from_child = child.get("from_child")
+
+    return(
+    f"""
+    def {getter_name}(self, {prop}:str) -> {class_}:
+        for file_child in self.{from_child}:
+            for child in file_child.{name}:
+                if child.{prop} == {prop}:
+                    return child
+        raise AssetNotFoundError({prop})
+""")
+
 def make_getter(child):
     if child.get("getter") is None:
         return ""
@@ -87,6 +109,12 @@ def make_creators(children):
     out = ""
     for child in children:
         out += make_creator(child)
+    return out
+
+def make_grandchild_getters(children):
+    out = ""
+    for child in children:
+        out += make_grandchild_getter(child)
     return out
 
 def make_getters(children):
@@ -201,6 +229,7 @@ class {class_}(Pack):
     {make_resource_accessors(children)}
     {make_grandchild_accessors(grand_children)}
     {make_getters(children)}
+    {make_grandchild_getters(grand_children)}
     """
     
 def make_json_resource(model):
