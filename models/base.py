@@ -3,11 +3,43 @@ from functools import cached_property
 from typing import Any
 from jsonpath_ng import *
 from io import TextIOWrapper
+import shlex
 from send2trash import send2trash
-
+import re
 import os
 import json
 import glob
+
+"'minecraft:client_entity' description.animations *"
+
+DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
+
+def get_value_at(data, json_path):
+    keys = DOT_MATCHER_REGEX.split(json_path)
+    for key in keys:
+        data = data[key.strip("'")]
+    
+    return data
+
+def get_data_at(json_path, data):
+    try:
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        # Last key should always be be *
+        if(keys.pop() != '*'):
+            raise ReticulatorException('get_data_at used with non-ambiguous path')
+
+        print(keys)
+        for key in keys:
+            data = data[key.strip("'")]
+        
+        if isinstance(data, dict):
+            for key in data.keys():
+                yield json_path.replace("*", f"'{key}'"), data[key]
+        else:
+            return 
+        
+    except KeyError:
+        raise AssetNotFoundError
 
 # Base exception class
 class ReticulatorException(Exception):
@@ -150,14 +182,6 @@ class Resource():
             return out_results
 
     @property
-    def data(self):
-        raise NotImplementedError
-
-    @data.setter
-    def data(self, data):
-        raise NotImplementedError
-
-    @property
     def dirty(self):
         raise NotImplementedError
 
@@ -232,32 +256,23 @@ class JsonResource(Resource):
         self.__mark_for_deletion = True
 
 class SubResource(Resource):
-    def __init__(self, parent: Resource, datum: DatumInContext) -> None:
+    def __init__(self, parent: Resource, json_path: str, data: dict) -> None:
         super().__init__(parent.pack, parent.file)
         self.parent = parent
-        self.datum = datum
-        self.json_path = datum.full_path
-        self.id = str(datum.path)
+        self.json_path = json_path
+        self.id = str(json_path)
+        self.data = self.convert_to_notify(data)
         self.__resources: SubResource = []
         self.parent.register_resource(self)
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
 
-    @property
-    def data(self):
-        if self._data == None:
-            raw_data = self.datum.value
-            if isinstance(raw_data, dict):
-                self._data = NotifyDict(raw_data, owner=self)
-            if isinstance(raw_data, list):
-                self._data = NotifyList(raw_data, owner=self)
-        return self._data
-
-    @data.setter
-    def data(self, data):
-        self.dirty = True
-        self._data = data
+    def convert_to_notify(self, raw_data):
+        if isinstance(raw_data, dict):
+            return NotifyDict(raw_data, owner=self)
+        if isinstance(raw_data, list):
+            return NotifyList(raw_data, owner=self)
 
     @property
     def dirty(self):
@@ -374,4 +389,3 @@ class Project():
     def save(self, force=False):
         self.__behavior_pack.save(force=force)
         self.__resource_pack.save(force=force)
-

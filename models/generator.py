@@ -173,11 +173,10 @@ def make_subrec_accessor(child):
     return f"""
     @cached_property
     def {name}(self) -> list[{class_}]:
-        internal_path = parse("{path}")
-        for match in internal_path.find(self.data):
-            self.__{name}.append({getter})
-        return self.__{name}
-"""
+        for path, data in get_data_at({path}, self.data):
+            self.__{name}.append({class_}(self, path, data))
+        return self.__components
+    """
 
 def make_property_accessor(child):
     name = child["name"]
