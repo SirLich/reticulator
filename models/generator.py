@@ -173,7 +173,7 @@ def make_subrec_accessor(child):
     return f"""
     @cached_property
     def {name}(self) -> list[{class_}]:
-        for path, data in get_data_at({path}, self.data):
+        for path, data in get_data_at("{path}", self.data):
             self.__{name}.append({class_}(self, path, data))
         return self.__components
     """
@@ -268,8 +268,8 @@ def make_sub_resource(model):
 
     return f"""
 class {class_}(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext{make_params(model)}) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict {make_params(model)}) -> None:
+        super().__init__(parent, json_path, data)
         {make_parameters(params)}
         {make_attributes(children)}
     {make_subrec_accessors(children)}

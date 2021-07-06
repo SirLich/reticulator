@@ -106,7 +106,7 @@
                 {
                     "class": "AnimationControllerRP",
                     "name": "animation_controllers",
-                    "json_path": "$.animation_controllers.*",
+                    "json_path": "animation_controllers.*",
                     "getter": {
                         "name": "get_animation_controller",
                         "property": "id"
@@ -119,11 +119,11 @@
             "properties": [
                 {
                     "name": "identifier",
-                    "json_path": "$.('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier"
+                    "json_path": "('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier"
                 },
                 {
                     "name": "format_version",
-                    "json_path": "$.format_version"
+                    "json_path": "format_version"
                 }
             ]
         },
@@ -132,11 +132,11 @@
             "properties": [
                 {
                     "name": "identifier",
-                    "json_path": "$.'minecraft:spawn_rules.description'.identifier"
+                    "json_path": "'minecraft:spawn_rules.description'.identifier"
                 },
                 {
                     "name": "format_version",
-                    "json_path": "$.format_version"
+                    "json_path": "format_version"
                 }
             ]
         },
@@ -146,7 +146,7 @@
                 {
                     "class": "LootTablePool",
                     "name": "pools",
-                    "json_path": "$.pools.[*]"
+                    "json_path": "pools.[*]"
                 }
             ]
         },
@@ -166,7 +166,7 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "json_path": "$.'minecraft:item'.components.*"
+                    "json_path": "'minecraft:item'.components.*"
                 }
             ]
         },
@@ -182,7 +182,7 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "json_path": "$.'minecraft:item'.components"
+                    "json_path": "'minecraft:item'.components"
                 }
             ]
         },
@@ -191,7 +191,7 @@
             "sub_resources": [
                 {
                     "class": "AnimationRP",
-                    "json_path": "$.'minecraft:client_entity'.description.animations.*",
+                    "json_path": "'minecraft:client_entity'.description.animations.*",
                     "name": "animations"
                 }
             ]
@@ -201,13 +201,13 @@
             "properties": [
                 {
                     "name": "format_version",
-                    "json_path": "$.format_version"
+                    "json_path": "format_version"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "AnimationRP",
-                    "json_path": "$.animations.*",
+                    "json_path": "animations.*",
                     "name": "animations"
                 }
             ]
@@ -216,18 +216,18 @@
             "class": "EntityFileBP",
             "properties": [
                 {
-                    "json_path": "$.format_version",
+                    "json_path": "format_version",
                     "name": "format_version"
                 },
                 {
-                    "json_path": "$.'minecraft:entity'.description.identifier",
+                    "json_path": "'minecraft:entity'.description.identifier",
                     "name": "identifier"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "ComponentGroup",
-                    "json_path": "$.'minecraft:entity'.component_groups.*",
+                    "json_path": "'minecraft:entity'.component_groups.*",
                     "name": "component_groups",
                     "getter": {
                         "name": "get_component_group",
@@ -239,7 +239,7 @@
                 },
                 {
                     "class": "Component",
-                    "json_path": "$.'minecraft:entity'.components.*",
+                    "json_path": "'minecraft:entity'.components.*",
                     "name": "components",
                     "getter": {
                         "name": "get_component",
@@ -251,7 +251,7 @@
                 },
                 {
                     "class": "Event",
-                    "json_path": "$.'minecraft:entity'.events.*",
+                    "json_path": "'minecraft:entity'.events.*",
                     "name": "events"
                 }
             ]
@@ -292,7 +292,7 @@
             "properties": [
                 {
                     "name": "identifier",
-                    "json_path": "$.description.identifier"
+                    "json_path": "description.identifier"
                 }
             ],
             "sub_resources": [
@@ -325,7 +325,7 @@
                     "json_path": "*",
                     "creator": {
                         "name": "create_component",
-                        "path": "$"
+                        "path": ""
                     }
                 }
             ]

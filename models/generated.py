@@ -1,6 +1,394 @@
+from __future__ import annotations
+from functools import cached_property
+from typing import Any
+from jsonpath_ng import *
+from io import TextIOWrapper
+import shlex
+from send2trash import send2trash
+import re
+import os
+import json
+import glob
+
+"'minecraft:client_entity' description.animations *"
+
+DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
+
+def get_value_at(data, json_path):
+    keys = DOT_MATCHER_REGEX.split(json_path)
+    for key in keys:
+        data = data[key.strip("'")]
+    
+    return data
+
+def get_data_at(json_path, data):
+    try:
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        # Last key should always be be *
+        if(keys.pop() != '*'):
+            raise ReticulatorException('get_data_at used with non-ambiguous path')
+
+        print(keys)
+        for key in keys:
+            data = data[key.strip("'")]
+        
+        if isinstance(data, dict):
+            for key in data.keys():
+                yield json_path.replace("*", f"'{key}'"), data[key]
+        else:
+            return 
+        
+    except KeyError:
+        raise AssetNotFoundError
+
+# Base exception class
+class ReticulatorException(Exception):
+    pass
+
+# Called when a "floating" asset attempts to access its parent pack, for example when saving
+class FloatingAssetError(ReticulatorException):
+    pass
+
+# Called when attempting to access an asset that does not exist, for example getting an entity by name
+class AssetNotFoundError(ReticulatorException):
+    pass
+
+# Called when a path is not unique
+class AmbiguousAssetError(ReticulatorException):
+    pass
+
+class NotifyDict(dict):
+    def __init__(self, *args, owner: Resource = None, **kwargs):
+        self.__owner = owner
+
+        if len(args) > 0:
+            for key, value in args[0].items():
+                if isinstance(value, dict):
+                    args[0][key] = NotifyDict(value, owner=self.__owner)
+                if isinstance(value, list):
+                    args[0][key] = NotifyList(value, owner=self.__owner)
+        super().__init__(*args, **kwargs)
 
 
+    def get_item(self, attr):
+        try:
+            return self.__getitem__(attr)
+        except:
+            return None
+    
+    def __delitem__(self, v) -> None:
+        if(self.__owner != None):
+            self.__owner.dirty = True
+        return super().__delitem__(v)
 
+    def __setitem__(self, attr, value):
+        if isinstance(value, dict):
+            value = NotifyDict(value, owner=self.__owner)
+        if isinstance(value, list):
+            value = NotifyList(value, owner=self.__owner)
+
+        if self.get_item(attr) != value:
+            if(self.__owner != None):
+                self.__owner.dirty = True
+
+        super().__setitem__(attr, value)
+
+class NotifyList(list):
+    def __init__(self, *args, owner: Resource = None, **kwargs):
+        self.__owner = owner
+
+        if len(args) > 0:
+            for i in range(len(args[0])):
+                if isinstance(args[0][i], dict):
+                    args[0][i] = NotifyDict(args[0][i], owner=self.__owner)
+                if isinstance(args[0][i], list):
+                    args[0][i] = NotifyList(args[0][i], owner=self.__owner)
+
+        super().__init__(*args, **kwargs)
+
+    def get_item(self, attr):
+        try:
+            return self.__getitem__(attr)
+        except:
+            return None
+
+    def __setitem__(self, attr, value):
+        if isinstance(value, dict):
+            value = NotifyDict(value, owner=self.__owner)
+        if isinstance(value, list):
+            value = NotifyList(value, owner=self.__owner)
+
+        if self.__getitem__(attr) != value:
+            if(self.__owner != None):
+                self.__owner.dirty = True
+        
+        super().__setitem__(attr, value)
+
+class Reticulator():
+    def __init__(self, username=None):
+        self.username = username if username != None else os.getlogin()
+        self.com_mojang_path = "C:\\Users\\{}\\AppData\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang".format(username)
+
+    def load_project_from_path(self, input_path) -> Project:
+        return Project(input_path)
+
+    def load_behavior_pack_from_path(self, input_path) -> BehaviorPack:
+        return BehaviorPack(input_path)
+    
+    def load_behavior_pack_from_folder_name(self, pack_name):
+        search_location = os.path.join(self.com_mojang_path, "development_behavior_packs");
+        for dir_name in os.listdir(search_location):
+            if dir_name == pack_name:
+                return self.load_behavior_pack_from_path(os.path.join(search_location, dir_name))
+
+    def load_behavior_pack_from_name(self):
+        pass
+
+    def load_behavior_pack_from_uuid(self):
+        pass
+
+    def load_resource_pack_from_path(self, input_path):
+        return ResourcePack(input_path)
+
+    def get_resource_packs(self):
+        pass
+
+    def get_behavior_packs(self):
+        pass
+
+class Resource():
+    def __init__(self, pack: Pack, file: JsonResource) -> None:
+        # Public
+        self.pack = pack
+        self.file = file
+
+        # Protected
+        self._data = None
+        self._dirty = False
+    
+    def set(self, parse_path: str, new_data: Any):
+        json_path = parse(parse_path)
+        json_path.update(self.data, new_data)
+
+    def get(self, parse_path: str):
+        results : list[DatumInContext] = parse(parse_path).find(self.data)
+        # If single, return a single element (or return multiple)
+        if len(results) == 1:
+            return results[0].value
+        else:
+            out_results = []
+            for result in results:
+                out_results.append(result.value)
+            return out_results
+
+    @property
+    def dirty(self):
+        raise NotImplementedError
+
+    @dirty.setter
+    def dirty(self, dirty):
+        raise NotImplementedError
+
+class JsonResource(Resource):
+    def __init__(self, pack: Pack = None, file_path: str = None, data: dict = None) -> None:
+        super().__init__(pack, self)
+        self.pack = pack
+
+        self.file_path = file_path
+
+        if file_path:
+            self.file_name = os.path.basename(file_path)
+
+        self.__resources = []
+        self.__mark_for_deletion: bool = False
+
+        # The case where data is passed in as an argument
+        if data != None:
+            self._data = NotifyDict(data, owner=self)
+
+        if pack:
+            self.pack.register_resource(self)
+
+    def __str__(self):
+        return json.dumps(self.data, indent=2)
+
+    @property
+    def data(self):
+        # The case where data was not passed in as an argument
+        if self._data == None:
+            self._data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
+        return self._data
+
+    @data.setter
+    def data(self, data):
+        self.dirty = True
+        self._data = data
+
+    @property
+    def dirty(self):
+        return self._dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self._dirty = dirty
+
+    def save(self, force=False):
+        # Don't allow saving
+        if not self.pack:
+            raise FloatingAssetError()
+
+        # TODO Should we also delete these files manually from disk?
+        # Do not save files that are marked for deletion
+        if self.__mark_for_deletion:
+            pass
+
+        elif self.dirty or force:
+            self.dirty = False
+            for resource in self.__resources:
+                resource._save(force=force)
+            self.pack.save_json(self.file_path, self.data)
+            self.dirty = False
+
+    def register_resource(self, resource):
+        self.__resources.append(resource)
+    
+    def delete(self):
+        self.__mark_for_deletion = True
+
+class SubResource(Resource):
+    def __init__(self, parent: Resource, json_path: str, data: dict) -> None:
+        super().__init__(parent.pack, parent.file)
+        self.parent = parent
+        self.json_path = json_path
+        self.id = str(json_path)
+        self.data = self.convert_to_notify(data)
+        self.__resources: SubResource = []
+        self.parent.register_resource(self)
+
+    def __str__(self):
+        return json.dumps(self.data, indent=2)
+
+    def convert_to_notify(self, raw_data):
+        if isinstance(raw_data, dict):
+            return NotifyDict(raw_data, owner=self)
+        if isinstance(raw_data, list):
+            return NotifyList(raw_data, owner=self)
+
+    @property
+    def dirty(self):
+        return self._dirty
+    
+    @dirty.setter
+    def dirty(self, dirty):
+        self._dirty = dirty
+        self.parent.dirty = dirty
+
+    def register_resource(self, resource: SubResource) -> None:
+        self.__resources.append(resource)
+        
+    def _save(self, force=False):
+        if self._dirty or force:
+            for resource in self.__resources:
+                resource._save(force=force)
+            self.json_path.update(self.parent.data, self.data)
+            self._dirty = False
+
+    def delete(self):
+        self.parent.dirty = True
+        self.json_path.filter(lambda d: True, self.parent.data)
+
+class Pack():
+    def __init__(self, input_path: str, project=None):
+        self.resources = []
+        self.__project = project
+        self.input_path = input_path
+        self.output_path = input_path
+
+    @cached_property
+    def project(self) -> Project:
+        return self.__project
+
+    def set_output_location(self, output_path: str) -> None:
+        self.output_path = output_path
+
+    def load_json(self, local_path):
+        return self.get_json_from_path(os.path.join(self.input_path, local_path))
+
+    def save_json(self, local_path, data):
+        return self.__save_json(os.path.join(self.output_path, local_path), data)
+
+    def delete_file(self, local_path):
+        try:
+            send2trash(os.path.join(self.output_path, local_path))
+        except:
+            pass
+
+    def save(self, force=False):
+        for resource in self.resources:
+            resource.save(force=force)
+
+    def register_resource(self, resource):
+        self.resources.append(resource)
+
+    def get_entity(self, identifier):
+        raise NotImplementedError
+        
+    @staticmethod
+    def get_json_from_path(path:str) -> dict:
+        with open(path, "r") as fh:
+            return Pack.__get_json_from_file(fh)
+
+    @staticmethod
+    def __get_json_from_file(fh:TextIOWrapper) -> dict:
+        try:
+            return json.load(fh)
+        except:
+            try:
+                fh.seek(0)
+                contents = ""
+                for line in fh.readlines():
+                    cleanedLine = line.split("//", 1)[0]
+                    if len(cleanedLine) > 0 and line.endswith("\n") and "\n" not in cleanedLine:
+                        cleanedLine += "\n"
+                    contents += cleanedLine
+                while "/*" in contents:
+                    preComment, postComment = contents.split("/*", 1)
+                    contents = preComment + postComment.split("*/", 1)[1]
+                return json.loads(contents)
+            except Exception as e:
+                print(e)
+                return {}
+    
+    @staticmethod
+    def __save_json(file_path, data):
+        dir_name = os.path.dirname(file_path)
+
+        if not os.path.exists(dir_name):
+            os.makedirs(os.path.dirname(file_path))
+
+        with open(file_path, "w+") as f:
+            return json.dump(data, f, indent=2)
+
+class Project():
+    def __init__(self, behavior_path: str, resource_path: str):
+        self.__behavior_path = behavior_path
+        self.__resource_path = resource_path
+        self.__resource_pack = None
+        self.__behavior_pack = None
+
+    @cached_property
+    def resource_pack(self) -> ResourcePack:
+        self.__resource_pack = ResourcePack(self.__resource_path, project=self)
+        return self.__resource_pack
+
+    @cached_property
+    def behavior_pack(self) -> BehaviorPack:
+        self.__behavior_pack = BehaviorPack(self.__behavior_path, project=self)
+        return self.__behavior_pack
+
+    def save(self, force=False):
+        self.__behavior_pack.save(force=force)
+        self.__resource_pack.save(force=force)
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
@@ -187,11 +575,10 @@ class AnimationControllerFileRP(JsonResource):
     
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
-        internal_path = parse("$.animation_controllers.*")
-        for match in internal_path.find(self.data):
-            self.__animation_controllers.append(AnimationControllerRP(self, match))
-        return self.__animation_controllers
-
+        for path, data in get_data_at("animation_controllers.*", self.data):
+            self.__animation_controllers.append(AnimationControllerRP(self, path, data))
+        return self.__components
+    
     
     def get_animation_controller(self, id:str) -> AnimationControllerRP:
         for child in self.animation_controllers:
@@ -208,19 +595,19 @@ class RecipeFile(JsonResource):
     
     @property
     def identifier(self):
-        return self.get("$.('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier")
+        return self.get("('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("$.('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier", identifier)
+        self.set("('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier", identifier)
 
     @property
     def format_version(self):
-        return self.get("$.format_version")
+        return self.get("format_version")
     
     @format_version.setter
     def format_version(self, format_version):
-        self.set("$.format_version", format_version)
+        self.set("format_version", format_version)
 
     
     
@@ -233,19 +620,19 @@ class SpawnRuleFile(JsonResource):
     
     @property
     def identifier(self):
-        return self.get("$.'minecraft:spawn_rules.description'.identifier")
+        return self.get("'minecraft:spawn_rules.description'.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("$.'minecraft:spawn_rules.description'.identifier", identifier)
+        self.set("'minecraft:spawn_rules.description'.identifier", identifier)
 
     @property
     def format_version(self):
-        return self.get("$.format_version")
+        return self.get("format_version")
     
     @format_version.setter
     def format_version(self, format_version):
-        self.set("$.format_version", format_version)
+        self.set("format_version", format_version)
 
     
     
@@ -260,11 +647,10 @@ class LootTableFile(JsonResource):
     
     @cached_property
     def pools(self) -> list[LootTablePool]:
-        internal_path = parse("$.pools.[*]")
-        for match in internal_path.find(self.data):
-            self.__pools.append(LootTablePool(self, match))
-        return self.__pools
-
+        for path, data in get_data_at("pools.[*]", self.data):
+            self.__pools.append(LootTablePool(self, path, data))
+        return self.__components
+    
     
     
     
@@ -293,11 +679,10 @@ class ItemFileRP(JsonResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        internal_path = parse("$.'minecraft:item'.components.*")
-        for match in internal_path.find(self.data):
-            self.__components.append(Component(self, match))
+        for path, data in get_data_at("'minecraft:item'.components.*", self.data):
+            self.__components.append(Component(self, path, data))
         return self.__components
-
+    
     
     
     
@@ -318,11 +703,10 @@ class ItemFileBP(JsonResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        internal_path = parse("$.'minecraft:item'.components")
-        for match in internal_path.find(self.data):
-            self.__components.append(Component(self, match))
+        for path, data in get_data_at("'minecraft:item'.components", self.data):
+            self.__components.append(Component(self, path, data))
         return self.__components
-
+    
     
     
     
@@ -335,11 +719,10 @@ class EntityFileRP(JsonResource):
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        internal_path = parse("$.'minecraft:client_entity'.description.animations.*")
-        for match in internal_path.find(self.data):
-            self.__animations.append(AnimationRP(self, match))
-        return self.__animations
-
+        for path, data in get_data_at("'minecraft:client_entity'.description.animations.*", self.data):
+            self.__animations.append(AnimationRP(self, path, data))
+        return self.__components
+    
     
     
     
@@ -351,20 +734,19 @@ class AnimationFileRP(JsonResource):
     
     @property
     def format_version(self):
-        return self.get("$.format_version")
+        return self.get("format_version")
     
     @format_version.setter
     def format_version(self, format_version):
-        self.set("$.format_version", format_version)
+        self.set("format_version", format_version)
 
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        internal_path = parse("$.animations.*")
-        for match in internal_path.find(self.data):
-            self.__animations.append(AnimationRP(self, match))
-        return self.__animations
-
+        for path, data in get_data_at("animations.*", self.data):
+            self.__animations.append(AnimationRP(self, path, data))
+        return self.__components
+    
     
     
     
@@ -378,42 +760,39 @@ class EntityFileBP(JsonResource):
     
     @property
     def format_version(self):
-        return self.get("$.format_version")
+        return self.get("format_version")
     
     @format_version.setter
     def format_version(self, format_version):
-        self.set("$.format_version", format_version)
+        self.set("format_version", format_version)
 
     @property
     def identifier(self):
-        return self.get("$.'minecraft:entity'.description.identifier")
+        return self.get("'minecraft:entity'.description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("$.'minecraft:entity'.description.identifier", identifier)
+        self.set("'minecraft:entity'.description.identifier", identifier)
 
     
     @cached_property
     def component_groups(self) -> list[ComponentGroup]:
-        internal_path = parse("$.'minecraft:entity'.component_groups.*")
-        for match in internal_path.find(self.data):
-            self.__component_groups.append(ComponentGroup(self, match))
-        return self.__component_groups
-
+        for path, data in get_data_at("'minecraft:entity'.component_groups.*", self.data):
+            self.__component_groups.append(ComponentGroup(self, path, data))
+        return self.__components
+    
     @cached_property
     def components(self) -> list[Component]:
-        internal_path = "'minecraft:entity'.components.*"
-        for path, data in get_data_at(internal_path, self.data):
+        for path, data in get_data_at("'minecraft:entity'.components.*", self.data):
             self.__components.append(Component(self, path, data))
         return self.__components
-
+    
     @cached_property
     def events(self) -> list[Event]:
-        internal_path = parse("$.'minecraft:entity'.events.*")
-        for match in internal_path.find(self.data):
-            self.__events.append(Event(self, match))
-        return self.__events
-
+        for path, data in get_data_at("'minecraft:entity'.events.*", self.data):
+            self.__events.append(Event(self, path, data))
+        return self.__components
+    
     
     def get_component_group(self, id:str) -> ComponentGroup:
         for child in self.component_groups:
@@ -430,7 +809,7 @@ class EntityFileBP(JsonResource):
     
     def create_component_group(self, name: str, data: dict) -> ComponentGroup:
         self.data['minecraft:entity']['component_groups'][name] = data
-        internal_path = parse(f"$.'minecraft:entity'.component_groups.'{name}'")
+        internal_path = parse(f"'minecraft:entity'.component_groups.'{name}'")
         matches = internal_path.find(self.data)
         if len(matches) > 1:
             raise AmbiguousAssetError(internal_path)
@@ -444,7 +823,7 @@ class EntityFileBP(JsonResource):
 
     def create_component(self, name: str, data: dict) -> Component:
         self.data['minecraft:entity']['components'][name] = data
-        internal_path = parse(f"$.'minecraft:entity'.components.'{name}'")
+        internal_path = parse(f"'minecraft:entity'.components.'{name}'")
         matches = internal_path.find(self.data)
         if len(matches) > 1:
             raise AmbiguousAssetError(internal_path)
@@ -466,11 +845,10 @@ class ModelFileRP(JsonResource):
     
     @cached_property
     def models(self) -> list[Model]:
-        internal_path = parse("'minecraft:geometry'.[*]")
-        for match in internal_path.find(self.data):
-            self.__models.append(Model(self, match))
-        return self.__models
-
+        for path, data in get_data_at("'minecraft:geometry'.[*]", self.data):
+            self.__models.append(Model(self, path, data))
+        return self.__components
+    
     
     
     
@@ -483,17 +861,16 @@ class AnimationControllerFile(JsonResource):
     
     @cached_property
     def animation_controllers(self) -> list[AnimationController]:
-        internal_path = parse("animation_controllers.*")
-        for match in internal_path.find(self.data):
-            self.__animation_controllers.append(AnimationController(self, match))
-        return self.__animation_controllers
-
+        for path, data in get_data_at("animation_controllers.*", self.data):
+            self.__animation_controllers.append(AnimationController(self, path, data))
+        return self.__components
+    
     
     
     
 class AnimationControllerRP(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         
     
@@ -502,8 +879,8 @@ class AnimationControllerRP(SubResource):
     
     
 class LootTablePool(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         
     
@@ -512,8 +889,8 @@ class LootTablePool(SubResource):
     
     
 class AnimationControllerState(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         
     
@@ -522,34 +899,33 @@ class AnimationControllerState(SubResource):
     
     
 class Model(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         self.__bones = []
         
     
     @cached_property
     def bones(self) -> list[Bone]:
-        internal_path = parse("bones.[*]")
-        for match in internal_path.find(self.data):
-            self.__bones.append(Bone(self, match))
-        return self.__bones
-
+        for path, data in get_data_at("bones.[*]", self.data):
+            self.__bones.append(Bone(self, path, data))
+        return self.__components
+    
     
     @property
     def identifier(self):
-        return self.get("$.description.identifier")
+        return self.get("description.identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        self.set("$.description.identifier", identifier)
+        self.set("description.identifier", identifier)
 
     
     
     
 class AnimationRP(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         
     
@@ -558,37 +934,35 @@ class AnimationRP(SubResource):
     
     
 class AnimationController(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         self.__states = []
         
     
     @cached_property
     def states(self) -> list[AnimationControllerState]:
-        internal_path = parse("states.*")
-        for match in internal_path.find(self.data):
-            self.__states.append(AnimationControllerState(self, match))
-        return self.__states
-
+        for path, data in get_data_at("states.*", self.data):
+            self.__states.append(AnimationControllerState(self, path, data))
+        return self.__components
+    
     
     
     
     
 class ComponentGroup(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         self.__components = []
         
     
     @cached_property
     def components(self) -> list[Component]:
-        internal_path = parse("*")
-        for match in internal_path.find(self.data):
-            self.__components.append(Component(self, match))
+        for path, data in get_data_at("*", self.data):
+            self.__components.append(Component(self, path, data))
         return self.__components
-
+    
     
     
     
@@ -608,7 +982,7 @@ class ComponentGroup(SubResource):
 
     
 class Component(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict, component_group: ComponentGroup = None) -> None:
+    def __init__(self, parent: JsonResource, json_path: str, data: dict , component_group: ComponentGroup = None) -> None:
         super().__init__(parent, json_path, data)
         
         
@@ -618,8 +992,8 @@ class Component(SubResource):
     
     
 class Event(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         self.__groups_to_add = []
         self.__groups_to_remove = []
@@ -627,43 +1001,40 @@ class Event(SubResource):
     
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
-        internal_path = parse("add.component_groups.[*]")
-        for match in internal_path.find(self.data):
-            self.__groups_to_add.append(ComponentGroup(self, match))
-        return self.__groups_to_add
-
+        for path, data in get_data_at("add.component_groups.[*]", self.data):
+            self.__groups_to_add.append(ComponentGroup(self, path, data))
+        return self.__components
+    
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
-        internal_path = parse("remove.component_groups.[*]")
-        for match in internal_path.find(self.data):
-            self.__groups_to_remove.append(ComponentGroup(self, match))
-        return self.__groups_to_remove
-
+        for path, data in get_data_at("remove.component_groups.[*]", self.data):
+            self.__groups_to_remove.append(ComponentGroup(self, path, data))
+        return self.__components
+    
     
     
     
     
 class Bone(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         self.__cubes = []
         
     
     @cached_property
     def cubes(self) -> list[Cube]:
-        internal_path = parse("cubes[*]")
-        for match in internal_path.find(self.data):
-            self.__cubes.append(Cube(self, match))
-        return self.__cubes
-
+        for path, data in get_data_at("cubes[*]", self.data):
+            self.__cubes.append(Cube(self, path, data))
+        return self.__components
+    
     
     
     
     
 class Cube(SubResource):
-    def __init__(self, parent: JsonResource, datum: DatumInContext) -> None:
-        super().__init__(parent, datum)
+    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
+        super().__init__(parent, json_path, data)
         
         
     
