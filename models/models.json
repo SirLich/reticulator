@@ -101,6 +101,9 @@
     ],
     "json_resources": [
         {
+            "class": "RenderControllerFileRP"
+        },
+        {
             "class": "AnimationControllerFileRP",
             "sub_resources": [
                 {

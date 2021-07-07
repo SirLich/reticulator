@@ -36,16 +36,8 @@ def make_creator(child):
     return (
     f"""
     def {creator_name}(self, name: str, data: dict) -> {class_}:
-        self.data{convert_json_path_to_list(path)} = data
-        internal_path = parse(f"{path}.'{{name}}'")
-        matches = internal_path.find(self.data)
-        if len(matches) > 1:
-            raise AmbiguousAssetError(internal_path)
-        
-        if len(matches) == 0:
-            raise AssetNotFoundError(name)
-        match = matches[0]
-        new_object = {class_}(self, match)
+        self.set_value_at("{path}." + name, self.data, data)
+        new_object = {class_}(self, "{path}." + name, data)
         self.__{name}.append(new_object)
         return new_object
 """)
@@ -173,9 +165,9 @@ def make_subrec_accessor(child):
     return f"""
     @cached_property
     def {name}(self) -> list[{class_}]:
-        for path, data in get_data_at("{path}", self.data):
+        for path, data in self.get_data_at("{path}", self.data):
             self.__{name}.append({class_}(self, path, data))
-        return self.__components
+        return self.__{name}
     """
 
 def make_property_accessor(child):
@@ -185,11 +177,11 @@ def make_property_accessor(child):
     return f"""
     @property
     def {name}(self):
-        return self.get("{path}")
+        return self.get_value_at("{path}", self.data)
     
     @{name}.setter
     def {name}(self, {name}):
-        self.set("{path}", {name})
+        return self.set_value_at("{path}", self.data, {name})
 """ 
 def make_property_accessors(children):
     out = ""

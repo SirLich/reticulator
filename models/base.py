@@ -1,9 +1,7 @@
 from __future__ import annotations
 from functools import cached_property
 from typing import Any
-from jsonpath_ng import *
 from io import TextIOWrapper
-import shlex
 from send2trash import send2trash
 import re
 import os
@@ -13,33 +11,6 @@ import glob
 "'minecraft:client_entity' description.animations *"
 
 DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
-
-def get_value_at(data, json_path):
-    keys = DOT_MATCHER_REGEX.split(json_path)
-    for key in keys:
-        data = data[key.strip("'")]
-    
-    return data
-
-def get_data_at(json_path, data):
-    try:
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        # Last key should always be be *
-        if(keys.pop() != '*'):
-            raise ReticulatorException('get_data_at used with non-ambiguous path')
-
-        print(keys)
-        for key in keys:
-            data = data[key.strip("'")]
-        
-        if isinstance(data, dict):
-            for key in data.keys():
-                yield json_path.replace("*", f"'{key}'"), data[key]
-        else:
-            return 
-        
-    except KeyError:
-        raise AssetNotFoundError
 
 # Base exception class
 class ReticulatorException(Exception):
@@ -136,7 +107,7 @@ class Reticulator():
         return BehaviorPack(input_path)
     
     def load_behavior_pack_from_folder_name(self, pack_name):
-        search_location = os.path.join(self.com_mojang_path, "development_behavior_packs");
+        search_location = os.path.join(self.com_mojang_path, "development_behavior_packs")
         for dir_name in os.listdir(search_location):
             if dir_name == pack_name:
                 return self.load_behavior_pack_from_path(os.path.join(search_location, dir_name))
@@ -166,20 +137,56 @@ class Resource():
         self._data = None
         self._dirty = False
     
-    def set(self, parse_path: str, new_data: Any):
-        json_path = parse(parse_path)
-        json_path.update(self.data, new_data)
+    def remove_value_at(self, json_path, data):
+        try:
+            keys = DOT_MATCHER_REGEX.split(json_path)
+            final = keys.pop().strip("'")
+            for key in keys:
+                data = data[key.strip("'")]
+            del data[final]
+        except KeyError:
+            raise AssetNotFoundError(json_path, data)
+            
+    def set_value_at(self, json_path, data: dict, insert_data: dict):
+        try:
+            keys = DOT_MATCHER_REGEX.split(json_path)
+            final = keys.pop().strip("'")
+            for key in keys:
+                data = data[key.strip("'")]
+            
+            data[final] = insert_data
+        except KeyError:
+            raise AssetNotFoundError(json_path, data)
 
-    def get(self, parse_path: str):
-        results : list[DatumInContext] = parse(parse_path).find(self.data)
-        # If single, return a single element (or return multiple)
-        if len(results) == 1:
-            return results[0].value
-        else:
-            out_results = []
-            for result in results:
-                out_results.append(result.value)
-            return out_results
+
+    def get_value_at(self, json_path, data):
+        try:
+            keys = DOT_MATCHER_REGEX.split(json_path)
+            for key in keys:
+                data = data[key.strip("'")]
+            
+            return data
+        except KeyError:
+            raise AssetNotFoundError(json_path, data)
+
+    def get_data_at(self, json_path, data):
+        try:
+            keys = DOT_MATCHER_REGEX.split(json_path)
+            # Last key should always be be *
+            if(keys.pop() != '*'):
+                raise ReticulatorException('get_data_at used with non-ambiguous path')
+
+            for key in keys:
+                data = data.get(key.strip("'"), {})
+            
+            if isinstance(data, dict):
+                for key in data.keys():
+                    yield json_path.strip("*") + f"'{key}'", data[key]
+            else:
+                return 
+            
+        except KeyError:
+            raise AssetNotFoundError(json_path, data)
 
     @property
     def dirty(self):
@@ -245,7 +252,7 @@ class JsonResource(Resource):
         elif self.dirty or force:
             self.dirty = False
             for resource in self.__resources:
-                resource._save(force=force)
+                resource.save(force=force)
             self.pack.save_json(self.file_path, self.data)
             self.dirty = False
 
@@ -286,16 +293,17 @@ class SubResource(Resource):
     def register_resource(self, resource: SubResource) -> None:
         self.__resources.append(resource)
         
-    def _save(self, force=False):
+    def save(self, force=False):
         if self._dirty or force:
             for resource in self.__resources:
-                resource._save(force=force)
-            self.json_path.update(self.parent.data, self.data)
+                resource.save(force=force)
+            
+            self.set_value_at(self.json_path, self.parent.data, self.data)
             self._dirty = False
 
     def delete(self):
         self.parent.dirty = True
-        self.json_path.filter(lambda d: True, self.parent.data)
+        self.remove_value_at(self.json_path, self.parent.data)
 
 class Pack():
     def __init__(self, input_path: str, project=None):
