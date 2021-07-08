@@ -169,6 +169,10 @@ class Resource():
         except KeyError:
             raise AssetNotFoundError(json_path, data)
 
+    def get_id_from_jsonpath(self, json_path):
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        return keys[len(keys) - 1].replace("'", "")
+
     def get_data_at(self, json_path, data):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
@@ -182,8 +186,7 @@ class Resource():
             if isinstance(data, dict):
                 for key in data.keys():
                     yield json_path.strip("*") + f"'{key}'", data[key]
-            else:
-                return 
+
             
         except KeyError:
             raise AssetNotFoundError(json_path, data)
@@ -267,7 +270,7 @@ class SubResource(Resource):
         super().__init__(parent.pack, parent.file)
         self.parent = parent
         self.json_path = json_path
-        self.id = str(json_path)
+        self.id = self.get_id_from_jsonpath(json_path)
         self.data = self.convert_to_notify(data)
         self.__resources: SubResource = []
         self.parent.register_resource(self)
@@ -280,6 +283,8 @@ class SubResource(Resource):
             return NotifyDict(raw_data, owner=self)
         if isinstance(raw_data, list):
             return NotifyList(raw_data, owner=self)
+        else:
+            return raw_data
 
     @property
     def dirty(self):
