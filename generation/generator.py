@@ -291,6 +291,6 @@ def generate(base, models, generated):
             outfile.write(make_sub_resource(model))
 
 def main():
-    generate("base.py", "models.json", "generated.py")
+    generate("base.py", "models.json", "../reticulator.py")
 
 main()
