@@ -154,6 +154,11 @@ class Resource():
             for key in keys:
                 data = data[key.strip("'")]
             
+            # If number, then cast
+            print(final)
+            if '[' in final:
+                final = int(final.strip('[]'))
+
             data[final] = insert_data
         except KeyError:
             raise AssetNotFoundError(json_path, data)
@@ -176,20 +181,28 @@ class Resource():
     def get_data_at(self, json_path, data):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
+
             # Last key should always be be *
-            if(keys.pop() != '*'):
-                raise ReticulatorException('get_data_at used with non-ambiguous path')
+            if keys.pop().strip("'") != '*':
+                raise AmbiguousAssetError('get_data_at used with non-ambiguous path', json_path)
 
             for key in keys:
                 data = data.get(key.strip("'"), {})
             
+            base = json_path.strip("*")
+
             if isinstance(data, dict):
                 for key in data.keys():
-                    yield json_path.strip("*") + f"'{key}'", data[key]
-
+                    yield base + f"'{key}'", data[key]
+            elif isinstance(data, list):
+                for i, element in enumerate(data):
+                    yield base + f"[{i}]", element
+            else:
+                raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
             
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
+
+        except KeyError as key_error:
+            raise AssetNotFoundError(json_path, data) from key_error
 
     @property
     def dirty(self):
@@ -342,9 +355,6 @@ class Pack():
 
     def register_resource(self, resource):
         self.resources.append(resource)
-
-    def get_entity(self, identifier):
-        raise NotImplementedError
         
     @staticmethod
     def get_json_from_path(path:str) -> dict:

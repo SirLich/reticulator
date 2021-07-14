@@ -154,6 +154,11 @@ class Resource():
             for key in keys:
                 data = data[key.strip("'")]
             
+            # If number, then cast
+            print(final)
+            if '[' in final:
+                final = int(final.strip('[]'))
+
             data[final] = insert_data
         except KeyError:
             raise AssetNotFoundError(json_path, data)
@@ -176,20 +181,28 @@ class Resource():
     def get_data_at(self, json_path, data):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
+
             # Last key should always be be *
-            if(keys.pop() != '*'):
-                raise ReticulatorException('get_data_at used with non-ambiguous path')
+            if keys.pop().strip("'") != '*':
+                raise AmbiguousAssetError('get_data_at used with non-ambiguous path', json_path)
 
             for key in keys:
                 data = data.get(key.strip("'"), {})
             
+            base = json_path.strip("*")
+
             if isinstance(data, dict):
                 for key in data.keys():
-                    yield json_path.strip("*") + f"'{key}'", data[key]
-
+                    yield base + f"'{key}'", data[key]
+            elif isinstance(data, list):
+                for i, element in enumerate(data):
+                    yield base + f"[{i}]", element
+            else:
+                raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
             
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
+
+        except KeyError as key_error:
+            raise AssetNotFoundError(json_path, data) from key_error
 
     @property
     def dirty(self):
@@ -342,9 +355,6 @@ class Pack():
 
     def register_resource(self, resource):
         self.resources.append(resource)
-
-    def get_entity(self, identifier):
-        raise NotImplementedError
         
     @staticmethod
     def get_json_from_path(path:str) -> dict:
@@ -476,9 +486,35 @@ class ResourcePack(Pack):
                 children.append(child)
         return children
 
+    @cached_property
+    def models(self) -> list[Model]:
+        children = []
+        for file in self.model_files:
+            for child in file.models:
+                children.append(child)
+        return children
+
     
     def get_animation_controller_file(self, file_name:str) -> AnimationControllerFileRP:
         for child in self.animation_controller_files:
+            if child.file_name == file_name:
+                return child
+        raise AssetNotFoundError(file_name)
+
+    def get_animation_file(self, file_name:str) -> AnimationFileRP:
+        for child in self.animation_files:
+            if child.file_name == file_name:
+                return child
+        raise AssetNotFoundError(file_name)
+
+    def get_entity(self, identifier:str) -> EntityFileRP:
+        for child in self.entities:
+            if child.identifier == identifier:
+                return child
+        raise AssetNotFoundError(identifier)
+
+    def get_model_file(self, file_name:str) -> ModelFileRP:
+        for child in self.model_files:
             if child.file_name == file_name:
                 return child
         raise AssetNotFoundError(file_name)
@@ -490,6 +526,13 @@ class ResourcePack(Pack):
                 if child.id == id:
                     return child
         raise AssetNotFoundError(id)
+
+    def get_model(self, identifier:str) -> Model:
+        for file_child in self.model_files:
+            for child in file_child.models:
+                if child.identifier == identifier:
+                    return child
+        raise AssetNotFoundError(identifier)
 
     
 class BehaviorPack(Pack):
@@ -669,7 +712,7 @@ class LootTableFile(JsonResource):
     
     @cached_property
     def pools(self) -> list[LootTablePool]:
-        for path, data in self.get_data_at("pools.[*]", self.data):
+        for path, data in self.get_data_at("pools.*", self.data):
             self.__pools.append(LootTablePool(self, path, data))
         return self.__pools
     
@@ -738,6 +781,14 @@ class EntityFileRP(JsonResource):
         self.__animations = []
         
     
+    @property
+    def identifier(self):
+        return self.get_value_at("'minecraft:client_entity'.description.identifier", self.data)
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        return self.set_value_at("'minecraft:client_entity'.description.identifier", self.data, identifier)
+
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
@@ -851,7 +902,7 @@ class ModelFileRP(JsonResource):
     
     @cached_property
     def models(self) -> list[Model]:
-        for path, data in self.get_data_at("'minecraft:geometry'.[*]", self.data):
+        for path, data in self.get_data_at("'minecraft:geometry'.*", self.data):
             self.__models.append(Model(self, path, data))
         return self.__models
     
@@ -913,7 +964,7 @@ class Model(SubResource):
     
     @cached_property
     def bones(self) -> list[Bone]:
-        for path, data in self.get_data_at("bones.[*]", self.data):
+        for path, data in self.get_data_at("bones.*", self.data):
             self.__bones.append(Bone(self, path, data))
         return self.__bones
     
@@ -999,13 +1050,13 @@ class Event(SubResource):
     
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("add.component_groups.[*]", self.data):
+        for path, data in self.get_data_at("add.component_groups.*", self.data):
             self.__groups_to_add.append(ComponentGroup(self, path, data))
         return self.__groups_to_add
     
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("remove.component_groups.[*]", self.data):
+        for path, data in self.get_data_at("remove.component_groups.*", self.data):
             self.__groups_to_remove.append(ComponentGroup(self, path, data))
         return self.__groups_to_remove
     
@@ -1022,7 +1073,7 @@ class Bone(SubResource):
     
     @cached_property
     def cubes(self) -> list[Cube]:
-        for path, data in self.get_data_at("cubes[*]", self.data):
+        for path, data in self.get_data_at("cubes.*", self.data):
             self.__cubes.append(Cube(self, path, data))
         return self.__cubes
     
