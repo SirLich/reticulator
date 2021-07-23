@@ -76,6 +76,20 @@
             "class": "BehaviorPack",
             "json_resources": [
                 {
+                    "class": "FeaturesFileBP",
+                    "name": "features_file",
+                    "file_path": "features"
+                },
+                {
+                    "class": "FeatureRulesFileBP",
+                    "name": "feature_rules_files",
+                    "file_path": "feature_rules",
+                    "getter": {
+                        "name": "get_feature_rules_file",
+                        "property": "identifier"
+                    }
+                },
+                {
                     "class": "SpawnRuleFile",
                     "name": "spawn_rules",
                     "file_path": "spawn_rules",
@@ -121,6 +135,19 @@
         }
     ],
     "json_resources": [
+        {
+            "class": "FeatureRulesFileBP",
+            "properties": [
+                {
+                    "name": "identifier",
+                    "json_path": "minecraft:feature_rules.description.identifier"
+                },
+                {
+                    "name": "format_version",
+                    "json_path": "format_version"
+                }
+            ]
+        },
         {
             "class": "RenderControllerFileRP"
         },

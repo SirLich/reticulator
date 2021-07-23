@@ -538,6 +538,7 @@ class ResourcePack(Pack):
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
+        self.__feature_rules_files = []
         self.__spawn_rules = []
         self.__recipes = []
         self.__entities = []
@@ -546,6 +547,15 @@ class BehaviorPack(Pack):
         self.__items = []
         
     
+    @cached_property
+    def feature_rules_files(self) -> list[FeatureRulesFileBP]:
+        base_directory = os.path.join(self.input_path, "feature_rules")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__feature_rules_files.append(FeatureRulesFileBP(self, local_path))
+            
+        return self.__feature_rules_files
+
     @cached_property
     def spawn_rules(self) -> list[SpawnRuleFile]:
         base_directory = os.path.join(self.input_path, "spawn_rules")
@@ -602,6 +612,12 @@ class BehaviorPack(Pack):
 
     
     
+    def get_feature_rules_file(self, identifier:str) -> FeatureRulesFileBP:
+        for child in self.feature_rules_files:
+            if child.identifier == identifier:
+                return child
+        raise AssetNotFoundError(identifier)
+
     def get_spawn_rule(self, identifier:str) -> SpawnRuleFile:
         for child in self.spawn_rules:
             if child.identifier == identifier:
@@ -620,6 +636,31 @@ class BehaviorPack(Pack):
                 return child
         raise AssetNotFoundError(identifier)
 
+    
+    
+class FeatureRulesFileBP(JsonResource):
+    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
+        super().__init__(pack, file_path, data)
+        
+    
+    @property
+    def identifier(self):
+        return self.get_value_at("minecraft:feature_rules.description.identifier", self.data)
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        return self.set_value_at("minecraft:feature_rules.description.identifier", self.data, identifier)
+
+    @property
+    def format_version(self):
+        return self.get_value_at("format_version", self.data)
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_value_at("format_version", self.data, format_version)
+
+    
+    
     
     
 class RenderControllerFileRP(JsonResource):
