@@ -1,34 +1,45 @@
 from __future__ import annotations
-from functools import cached_property
-from typing import Any
-from io import TextIOWrapper
-from send2trash import send2trash
 import re
 import os
 import json
 import glob
+from functools import cached_property
+from io import TextIOWrapper
+from send2trash import send2trash
 
-"'minecraft:client_entity' description.animations *"
+# Constants
 
 DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
 
-# Base exception class
 class ReticulatorException(Exception):
-    pass
+    """
+    Base class for Reticulator exceptions.
+    """
 
-# Called when a "floating" asset attempts to access its parent pack, for example when saving
 class FloatingAssetError(ReticulatorException):
-    pass
+    """
+    Called when a "floating" asset attempts to access its parent pack, for
+    example when saving
+    """
 
-# Called when attempting to access an asset that does not exist, for example getting an entity by name
 class AssetNotFoundError(ReticulatorException):
-    pass
+    """
+    Called when attempting to access an asset that does not exist, for
+    example getting an entity by name
+    """
 
-# Called when a path is not unique
 class AmbiguousAssetError(ReticulatorException):
-    pass
+    """
+    Called when a path is not unique
+    """
+
+# TODO: Replace these with a hash-based edit-detection method?
 
 class NotifyDict(dict):
+    """
+    A notify dictionary is a dictionary that can notify its parent when its been
+    edited.
+    """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
 
@@ -65,6 +76,10 @@ class NotifyDict(dict):
         super().__setitem__(attr, value)
 
 class NotifyList(list):
+    """
+    A notify list is a list which can notify its owner when it has
+    changed.
+    """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
 
@@ -94,38 +109,6 @@ class NotifyList(list):
                 self.__owner.dirty = True
         
         super().__setitem__(attr, value)
-
-class Reticulator():
-    def __init__(self, username=None):
-        self.username = username if username != None else os.getlogin()
-        self.com_mojang_path = "C:\\Users\\{}\\AppData\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang".format(username)
-
-    def load_project_from_path(self, input_path) -> Project:
-        return Project(input_path)
-
-    def load_behavior_pack_from_path(self, input_path) -> BehaviorPack:
-        return BehaviorPack(input_path)
-    
-    def load_behavior_pack_from_folder_name(self, pack_name):
-        search_location = os.path.join(self.com_mojang_path, "development_behavior_packs")
-        for dir_name in os.listdir(search_location):
-            if dir_name == pack_name:
-                return self.load_behavior_pack_from_path(os.path.join(search_location, dir_name))
-
-    def load_behavior_pack_from_name(self):
-        pass
-
-    def load_behavior_pack_from_uuid(self):
-        pass
-
-    def load_resource_pack_from_path(self, input_path):
-        return ResourcePack(input_path)
-
-    def get_resource_packs(self):
-        pass
-
-    def get_behavior_packs(self):
-        pass
 
 class Resource():
     def __init__(self, pack: Pack, file: JsonResource) -> None:
@@ -412,3 +395,7 @@ class Project():
     def save(self, force=False):
         self.__behavior_pack.save(force=force)
         self.__resource_pack.save(force=force)
+
+# Forward Declares
+class BehaviorPack(Pack): pass
+class ResourcePack(Pack): pass
