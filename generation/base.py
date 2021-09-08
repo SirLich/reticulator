@@ -1,4 +1,5 @@
 from __future__ import annotations
+from abc import abstractclassmethod, abstractmethod
 from functools import cached_property
 from typing import Any
 from io import TextIOWrapper
@@ -10,25 +11,36 @@ import glob
 
 "'minecraft:client_entity' description.animations *"
 
+# TODO What does this do?
 DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
 
-# Base exception class
 class ReticulatorException(Exception):
-    pass
+    """
+    Base class for Reticulator exceptions.
+    """
 
-# Called when a "floating" asset attempts to access its parent pack, for example when saving
 class FloatingAssetError(ReticulatorException):
-    pass
+    """
+    Called when a "floating" asset attempts to access its parent pack, for
+    example when saving
+    """
 
-# Called when attempting to access an asset that does not exist, for example getting an entity by name
 class AssetNotFoundError(ReticulatorException):
-    pass
+    """
+    Called when attempting to access an asset that does not exist, for
+    example getting an entity by name
+    """
 
-# Called when a path is not unique
 class AmbiguousAssetError(ReticulatorException):
-    pass
+    """
+    Called when a path is not unique
+    """
 
 class NotifyDict(dict):
+    """
+    A notify dictionary is a dictionary that can notify its parent when its been
+    edited.
+    """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
 
@@ -40,7 +52,6 @@ class NotifyDict(dict):
                     args[0][key] = NotifyList(value, owner=self.__owner)
         super().__init__(*args, **kwargs)
 
-
     def get_item(self, attr):
         try:
             return self.__getitem__(attr)
@@ -48,7 +59,7 @@ class NotifyDict(dict):
             return None
     
     def __delitem__(self, v) -> None:
-        if(self.__owner != None):
+        if(self.__owner is not None):
             self.__owner.dirty = True
         return super().__delitem__(v)
 
@@ -65,6 +76,10 @@ class NotifyDict(dict):
         super().__setitem__(attr, value)
 
 class NotifyList(list):
+    """
+    A notify list is a list which can notify its owner when it has
+    changed.
+    """
     def __init__(self, *args, owner: Resource = None, **kwargs):
         self.__owner = owner
 
@@ -128,7 +143,18 @@ class Reticulator():
         pass
 
 class Resource():
-    def __init__(self, pack: Pack, file: JsonResource) -> None:
+    """
+    The top resource in the inheritance chain. 
+    
+    Contains:
+     - reference to the Pack (could be blank, if floating resource)
+     - reference to the File (could be a few links up the chain)
+     - dirty status
+     - abstract ability to save
+     - list of children resources
+    """
+
+    def __init__(self, file: FileResource = None, pack: Pack = None) -> None:
         # Public
         self.pack = pack
         self.file = file
@@ -136,7 +162,133 @@ class Resource():
         # Protected
         self._data = None
         self._dirty = False
-    
+
+        # Private
+        self.__resources: Resource = []
+
+
+    @property
+    def dirty(self):
+        raise NotImplementedError
+
+    @dirty.setter
+    def dirty(self, dirty):
+        raise NotImplementedError
+
+    def register_resource(self, resource):
+        """
+        Register a child resource. These resources will always be saved first.
+        """
+        self.__resources.append(resource)
+
+    def _should_save(self):
+        """
+        Whether the asset can be saved.
+
+        By default, this is related to dirty status
+        """
+        return self.dirty
+
+    def _save(self, force=False):
+        """Internal implementation of asset saving."""
+        raise NotImplementedError()
+
+    def _should_delete(self):
+        return True
+
+    def save(self, force=False):
+        """
+        Save the resource. Should not be overridden.
+        """
+
+        # Assets without packs may not save.
+        if not self.pack:
+            raise FloatingAssetError()
+
+        if self._should_save() or force:
+            self.dirty = False
+            for resource in self.__resources:
+                resource.save(force=force)
+
+            # Internal save handling
+            self._save()
+            self.dirty = False
+
+    def _delete(self, force=False):
+        """Internal implementation for asset deletion."""
+        raise NotImplementedError()
+
+    def delete(self, force=False):
+        """
+        Deletes the resource. Should not be overridden.
+        """
+
+        if self._should_delete() or force:
+            # First, delete all resources of children
+            for resource in self.__resources:
+                resource.delete(force=force)
+
+            # Then delete self
+            self._delete(force=force)
+
+            # Then save, respecting points where files may not want to save
+            # TODO: Should we force? Or call .save() directly?
+            self.save(force=force)
+
+class FileResource(Resource):
+    """
+    A resource, which is also a file.
+
+    Contains:
+     - File path
+     - ability to mark for deletion
+    """
+    def __init__(self, file_path: str, pack: Pack = None) -> None:
+        super().__init__(pack, pack=pack, )
+
+        # Public
+        self.file_path = file_path
+
+        # Private
+        self.__mark_for_deletion: bool = False
+
+    # Deletion does not actually delete, but rather just prevents saving
+    def _delete(self, force = False):
+        self.__mark_for_deletion = True
+
+    def _should_delete(self):
+        return not self.__mark_for_deletion and super()._should_delete()
+
+    def _should_save(self):
+        return not self.__mark_for_deletion and super()._should_save()
+
+
+class JsonResource(Resource):
+    """
+    Parent class, which is responsible for all resources which contain
+    json data.
+
+    Should not be used directly. Use should JsonFileResource, or JsonSubResource.
+
+    Contains:
+     - Data object
+     - Method for interacting with the data
+    """
+
+    def __init__(self, data: dict, file: FileResource = None, pack: Pack = None) -> None:
+        self.data = self.convert_to_notify(data)
+        super().__init__(file=file, pack=pack)
+
+    def convert_to_notify(self, raw_data):
+        if isinstance(raw_data, dict):
+            return NotifyDict(raw_data, owner=self)
+        if isinstance(raw_data, list):
+            return NotifyList(raw_data, owner=self)
+        else:
+            return raw_data
+
+    # TODO: Make all these methods into using self.data.
+
     def remove_value_at(self, json_path, data):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
@@ -203,27 +355,24 @@ class Resource():
 
         except KeyError as key_error:
             raise AssetNotFoundError(json_path, data) from key_error
+    
 
-    @property
-    def dirty(self):
-        raise NotImplementedError
+class LanguageResource(Resource):
+    def __init__(self, pack: Pack, file: JsonFileResource) -> None:
+        super().__init__(pack, file)
 
-    @dirty.setter
-    def dirty(self, dirty):
-        raise NotImplementedError
 
-class JsonResource(Resource):
+class JsonFileResource(FileResource, JsonResource):
+    """
+    A file, which contains json data. Most files in the addon system
+    are of this type, or have it as a resource parent.
+    """
     def __init__(self, pack: Pack = None, file_path: str = None, data: dict = None) -> None:
         super().__init__(pack, self)
         self.pack = pack
 
-        self.file_path = file_path
-
         if file_path:
             self.file_name = os.path.basename(file_path)
-
-        self.__resources = []
-        self.__mark_for_deletion: bool = False
 
         # The case where data is passed in as an argument
         if data != None:
@@ -255,49 +404,27 @@ class JsonResource(Resource):
     def dirty(self, dirty):
         self._dirty = dirty
 
-    def save(self, force=False):
-        # Don't allow saving
-        if not self.pack:
-            raise FloatingAssetError()
+    def _should_save(self):
+        return not self.__mark_for_deletion and super()._should_save()
 
-        # TODO Should we also delete these files manually from disk?
-        # Do not save files that are marked for deletion
-        if self.__mark_for_deletion:
-            pass
+    def _save(self, force):
+        self.pack.save_json(self.file_path, self.data)
 
-        elif self.dirty or force:
-            self.dirty = False
-            for resource in self.__resources:
-                resource.save(force=force)
-            self.pack.save_json(self.file_path, self.data)
-            self.dirty = False
-
-    def register_resource(self, resource):
-        self.__resources.append(resource)
-    
     def delete(self):
         self.__mark_for_deletion = True
 
-class SubResource(Resource):
+class JsonSubResource(JsonResource):
     def __init__(self, parent: Resource, json_path: str, data: dict) -> None:
         super().__init__(parent.pack, parent.file)
+        self.data = data
         self.parent = parent
         self.json_path = json_path
         self.id = self.get_id_from_jsonpath(json_path)
-        self.data = self.convert_to_notify(data)
-        self.__resources: SubResource = []
+        self.__resources: JsonSubResource = []
         self.parent.register_resource(self)
 
     def __str__(self):
         return json.dumps(self.data, indent=2)
-
-    def convert_to_notify(self, raw_data):
-        if isinstance(raw_data, dict):
-            return NotifyDict(raw_data, owner=self)
-        if isinstance(raw_data, list):
-            return NotifyList(raw_data, owner=self)
-        else:
-            return raw_data
 
     @property
     def dirty(self):
@@ -308,7 +435,7 @@ class SubResource(Resource):
         self._dirty = dirty
         self.parent.dirty = dirty
 
-    def register_resource(self, resource: SubResource) -> None:
+    def register_resource(self, resource: JsonSubResource) -> None:
         self.__resources.append(resource)
         
     def save(self, force=False):
