@@ -151,7 +151,7 @@ def make_resource_accessor(child):
         base_directory = os.path.join(self.input_path, "{path}")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__{name}.append({class_}(self, local_path))
+            self.__{name}.append({class_}(file_path = local_path, pack = self))
             
         return self.__{name}
 """
@@ -166,7 +166,7 @@ def make_subrec_accessor(child):
     @cached_property
     def {name}(self) -> list[{class_}]:
         for path, data in self.get_data_at("{path}", self.data):
-            self.__{name}.append({class_}(self, path, data))
+            self.__{name}.append({class_}(parent = self, json_path = path, data = data))
         return self.__{name}
     """
 
@@ -229,9 +229,9 @@ def make_json_resource(model):
     properties = model.get("properties", [])
 
     data = f"""
-class {class_}(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class {class_}(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         {make_attributes(children)}
     {make_property_accessors(properties)}
     {make_subrec_accessors(children)}
@@ -259,9 +259,9 @@ def make_sub_resource(model):
     properties = model.get("properties", [])
 
     return f"""
-class {class_}(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict {make_params(model)}) -> None:
-        super().__init__(parent, json_path, data)
+class {class_}(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None {make_params(model)}) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         {make_parameters(params)}
         {make_attributes(children)}
     {make_subrec_accessors(children)}

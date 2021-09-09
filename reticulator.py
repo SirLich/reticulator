@@ -11,6 +11,7 @@ from send2trash import send2trash
 
 DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
 
+# region exceptions
 class ReticulatorException(Exception):
     """
     Base class for Reticulator exceptions.
@@ -32,6 +33,11 @@ class AmbiguousAssetError(ReticulatorException):
     """
     Called when a path is not unique
     """
+
+#endregion
+
+# region notify classes
+
 
 # TODO: Replace these with a hash-based edit-detection method?
 
@@ -110,8 +116,21 @@ class NotifyList(list):
         
         super().__setitem__(attr, value)
 
+# endregion
+
 class Resource():
-    def __init__(self, pack: Pack, file: JsonResource) -> None:
+    """
+    The top resource in the inheritance chain.
+
+    Contains:
+     - reference to the Pack (could be blank, if floating resource)
+     - reference to the File (could be a few links up the chain)
+     - dirty status
+     - abstract ability to save
+     - list of children resources
+    """
+
+    def __init__(self, file: FileResource = None, pack: Pack = None) -> None:
         # Public
         self.pack = pack
         self.file = file
@@ -119,7 +138,135 @@ class Resource():
         # Protected
         self._data = None
         self._dirty = False
-    
+
+        # Private
+        self.__resources: Resource = []
+
+
+    @property
+    def dirty(self):
+        raise NotImplementedError
+
+    @dirty.setter
+    def dirty(self, dirty):
+        raise NotImplementedError
+
+    def register_resource(self, resource):
+        """
+        Register a child resource. These resources will always be saved first.
+        """
+        self.__resources.append(resource)
+
+    def _should_save(self):
+        """
+        Whether the asset can be saved.
+        By default, this is related to dirty status
+        """
+        return self.dirty
+
+    def _should_delete(self):
+        return True
+
+    def _save(self, force=False):
+        """Internal implementation of asset saving."""
+        raise NotImplementedError()
+
+    def _delete(self, force=False):
+        """Internal implementation for asset deletion."""
+        raise NotImplementedError()
+
+
+    def save(self, force=False):
+        """
+        Save the resource. Should not be overridden.
+        """
+
+        # Assets without packs may not save.
+        if not self.pack:
+            raise FloatingAssetError()
+
+        if self._should_save() or force:
+            self.dirty = False
+            for resource in self.__resources:
+                resource.save(force=force)
+
+            # Internal save handling
+            self._save()
+            self.dirty = False
+
+    def delete(self, force=False):
+        """
+        Deletes the resource. Should not be overridden.
+        """
+
+        if self._should_delete() or force:
+            # First, delete all resources of children
+            for resource in self.__resources:
+                resource.delete(force=force)
+
+            # Then delete self
+            self._delete(force=force)
+
+            # Then save, respecting points where files may not want to save
+            # TODO: Should we force? Or call .save() directly?
+            self.save(force=force)
+
+class FileResource(Resource):
+    """
+    A resource, which is also a file.
+    Contains:
+     - File path
+     - ability to mark for deletion
+    """
+    def __init__(self, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(file=self, pack=pack)
+
+        # Public
+        self.file_path = file_path
+        if file_path: 
+            self.file_name = os.path.basename(file_path)
+
+        # Private
+        self.__mark_for_deletion: bool = False
+
+    # Deletion does not actually delete, but rather just prevents saving
+    def _delete(self, force = False):
+        self.__mark_for_deletion = True
+
+    def _should_delete(self):
+        return not self.__mark_for_deletion and super()._should_delete()
+
+    def _should_save(self):
+        return not self.__mark_for_deletion and super()._should_save()
+
+class JsonResource(Resource):
+    """
+    Parent class, which is responsible for all resources which contain
+    json data.
+    Should not be used directly. Use should JsonFileResource, or JsonSubResource.
+    Contains:
+     - Data object
+     - Method for interacting with the data
+    """
+
+    def __init__(self, data: dict = None, file: FileResource = None, pack: Pack = None) -> None:
+        super().__init__(file=file, pack=pack)
+        self.data = self.convert_to_notify(data)
+
+    def convert_to_notify(self, raw_data):
+        if isinstance(raw_data, dict):
+            return NotifyDict(raw_data, owner=self)
+
+        if isinstance(raw_data, list):
+            return NotifyList(raw_data, owner=self)
+        
+        return raw_data
+
+    # TODO: Make all these methods into using self.data.
+
+    def __str__(self):
+        return json.dumps(self.data, indent=2)
+
     def remove_value_at(self, json_path, data):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
@@ -157,10 +304,6 @@ class Resource():
         except KeyError:
             raise AssetNotFoundError(json_path, data)
 
-    def get_id_from_jsonpath(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        return keys[len(keys) - 1].replace("'", "")
-
     def get_data_at(self, json_path, data):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
@@ -187,42 +330,23 @@ class Resource():
         except KeyError as key_error:
             raise AssetNotFoundError(json_path, data) from key_error
 
-    @property
-    def dirty(self):
-        raise NotImplementedError
-
-    @dirty.setter
-    def dirty(self, dirty):
-        raise NotImplementedError
-
-class JsonResource(Resource):
-    def __init__(self, pack: Pack = None, file_path: str = None, data: dict = None) -> None:
-        super().__init__(pack, self)
-        self.pack = pack
-
-        self.file_path = file_path
-
-        if file_path:
-            self.file_name = os.path.basename(file_path)
-
-        self.__resources = []
-        self.__mark_for_deletion: bool = False
-
-        # The case where data is passed in as an argument
+class JsonFileResource(FileResource, JsonResource):
+    """
+    A file, which contains json data. Most files in the addon system
+    are of this type, or have it as a resource parent.
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        FileResource.__init__(self, file_path=file_path, pack=pack)
+        
         if data != None:
             self._data = NotifyDict(data, owner=self)
+        else:
+            self._data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
 
-        if pack:
-            self.pack.register_resource(self)
-
-    def __str__(self):
-        return json.dumps(self.data, indent=2)
+        JsonResource.__init__(self, data=self._data, file=self, pack=pack)
 
     @property
     def data(self):
-        # The case where data was not passed in as an argument
-        if self._data == None:
-            self._data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
         return self._data
 
     @data.setter
@@ -238,41 +362,33 @@ class JsonResource(Resource):
     def dirty(self, dirty):
         self._dirty = dirty
 
-    def save(self, force=False):
-        # Don't allow saving
-        if not self.pack:
-            raise FloatingAssetError()
+    def _should_save(self):
+        return not self.__mark_for_deletion and super()._should_save()
 
-        # TODO Should we also delete these files manually from disk?
-        # Do not save files that are marked for deletion
-        if self.__mark_for_deletion:
-            pass
+    def _save(self, force):
+        self.pack.save_json(self.file_path, self.data)
 
-        elif self.dirty or force:
-            self.dirty = False
-            for resource in self.__resources:
-                resource.save(force=force)
-            self.pack.save_json(self.file_path, self.data)
-            self.dirty = False
-
-    def register_resource(self, resource):
-        self.__resources.append(resource)
-    
     def delete(self):
         self.__mark_for_deletion = True
 
-class SubResource(Resource):
-    def __init__(self, parent: Resource, json_path: str, data: dict) -> None:
-        super().__init__(parent.pack, parent.file)
+class JsonSubResource(JsonResource):
+    """
+    A sub resource represents a chunk of json data, within a file.
+    """
+    def __init__(self, parent: Resource = None, json_path: str = None, data: dict = None) -> None:
+        super().__init__(data = data, pack = parent.pack, file = parent.file)
         self.parent = parent
         self.json_path = json_path
         self.id = self.get_id_from_jsonpath(json_path)
         self.data = self.convert_to_notify(data)
-        self.__resources: SubResource = []
+        self.__resources: JsonSubResource = []
         self.parent.register_resource(self)
 
-    def __str__(self):
-        return json.dumps(self.data, indent=2)
+
+    def get_id_from_jsonpath(self, json_path):
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        return keys[len(keys) - 1].replace("'", "")
+
 
     def convert_to_notify(self, raw_data):
         if isinstance(raw_data, dict):
@@ -291,7 +407,7 @@ class SubResource(Resource):
         self._dirty = dirty
         self.parent.dirty = dirty
 
-    def register_resource(self, resource: SubResource) -> None:
+    def register_resource(self, resource: JsonSubResource) -> None:
         self.__resources.append(resource)
         
     def save(self, force=False):
@@ -305,6 +421,11 @@ class SubResource(Resource):
     def delete(self):
         self.parent.dirty = True
         self.remove_value_at(self.json_path, self.parent.data)
+
+class LanguageFile(FileResource):
+    def __init__(self, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(file_path=file_path, pack=pack)
+
 
 class Pack():
     def __init__(self, input_path: str, project=None):
@@ -415,7 +536,7 @@ class ResourcePack(Pack):
         base_directory = os.path.join(self.input_path, "animation_controllers")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__animation_controller_files.append(AnimationControllerFileRP(self, local_path))
+            self.__animation_controller_files.append(AnimationControllerFileRP(file_path = local_path, pack = self))
             
         return self.__animation_controller_files
 
@@ -424,7 +545,7 @@ class ResourcePack(Pack):
         base_directory = os.path.join(self.input_path, "animations")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__animation_files.append(AnimationFileRP(self, local_path))
+            self.__animation_files.append(AnimationFileRP(file_path = local_path, pack = self))
             
         return self.__animation_files
 
@@ -433,7 +554,7 @@ class ResourcePack(Pack):
         base_directory = os.path.join(self.input_path, "entity")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__entities.append(EntityFileRP(self, local_path))
+            self.__entities.append(EntityFileRP(file_path = local_path, pack = self))
             
         return self.__entities
 
@@ -442,7 +563,7 @@ class ResourcePack(Pack):
         base_directory = os.path.join(self.input_path, "models")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__model_files.append(ModelFileRP(self, local_path))
+            self.__model_files.append(ModelFileRP(file_path = local_path, pack = self))
             
         return self.__model_files
 
@@ -451,7 +572,7 @@ class ResourcePack(Pack):
         base_directory = os.path.join(self.input_path, "render_controllers")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__render_controllers.append(RenderControllerFileRP(self, local_path))
+            self.__render_controllers.append(RenderControllerFileRP(file_path = local_path, pack = self))
             
         return self.__render_controllers
 
@@ -460,7 +581,7 @@ class ResourcePack(Pack):
         base_directory = os.path.join(self.input_path, "items")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__items.append(ItemFileRP(self, local_path))
+            self.__items.append(ItemFileRP(file_path = local_path, pack = self))
             
         return self.__items
 
@@ -540,7 +661,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "features")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__features_file.append(FeaturesFileBP(self, local_path))
+            self.__features_file.append(FeaturesFileBP(file_path = local_path, pack = self))
             
         return self.__features_file
 
@@ -549,7 +670,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "feature_rules")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__feature_rules_files.append(FeatureRulesFileBP(self, local_path))
+            self.__feature_rules_files.append(FeatureRulesFileBP(file_path = local_path, pack = self))
             
         return self.__feature_rules_files
 
@@ -558,7 +679,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "spawn_rules")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__spawn_rules.append(SpawnRuleFile(self, local_path))
+            self.__spawn_rules.append(SpawnRuleFile(file_path = local_path, pack = self))
             
         return self.__spawn_rules
 
@@ -567,7 +688,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "recipes")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__recipes.append(RecipeFile(self, local_path))
+            self.__recipes.append(RecipeFile(file_path = local_path, pack = self))
             
         return self.__recipes
 
@@ -576,7 +697,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "entities")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__entities.append(EntityFileBP(self, local_path))
+            self.__entities.append(EntityFileBP(file_path = local_path, pack = self))
             
         return self.__entities
 
@@ -585,7 +706,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "animation_controllers")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__animation_controller_files.append(AnimationControllerFile(self, local_path))
+            self.__animation_controller_files.append(AnimationControllerFile(file_path = local_path, pack = self))
             
         return self.__animation_controller_files
 
@@ -594,7 +715,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "loot_tables")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__loot_tables.append(LootTableFile(self, local_path))
+            self.__loot_tables.append(LootTableFile(file_path = local_path, pack = self))
             
         return self.__loot_tables
 
@@ -603,7 +724,7 @@ class BehaviorPack(Pack):
         base_directory = os.path.join(self.input_path, "items")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__items.append(ItemFileBP(self, local_path))
+            self.__items.append(ItemFileBP(file_path = local_path, pack = self))
             
         return self.__items
 
@@ -635,9 +756,9 @@ class BehaviorPack(Pack):
 
     
     
-class FeatureRulesFileBP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class FeatureRulesFileBP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         
     
     @property
@@ -660,18 +781,18 @@ class FeatureRulesFileBP(JsonResource):
     
     
     
-class RenderControllerFileRP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class RenderControllerFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         
     
     
     
     
     
-class AnimationControllerFileRP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class AnimationControllerFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
         
     
@@ -679,7 +800,7 @@ class AnimationControllerFileRP(JsonResource):
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
         for path, data in self.get_data_at("animation_controllers.*", self.data):
-            self.__animation_controllers.append(AnimationControllerRP(self, path, data))
+            self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
         return self.__animation_controllers
     
     
@@ -691,9 +812,9 @@ class AnimationControllerFileRP(JsonResource):
 
     
     
-class RecipeFile(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class RecipeFile(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         
     
     @property
@@ -716,9 +837,9 @@ class RecipeFile(JsonResource):
     
     
     
-class SpawnRuleFile(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class SpawnRuleFile(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         
     
     @property
@@ -741,9 +862,9 @@ class SpawnRuleFile(JsonResource):
     
     
     
-class LootTableFile(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class LootTableFile(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__pools = []
         
     
@@ -751,15 +872,15 @@ class LootTableFile(JsonResource):
     @cached_property
     def pools(self) -> list[LootTablePool]:
         for path, data in self.get_data_at("pools.*", self.data):
-            self.__pools.append(LootTablePool(self, path, data))
+            self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
     
     
     
     
-class ItemFileRP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class ItemFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
         
     
@@ -783,15 +904,15 @@ class ItemFileRP(JsonResource):
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("'minecraft:item'.components.*", self.data):
-            self.__components.append(Component(self, path, data))
+            self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     
     
     
-class ItemFileBP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class ItemFileBP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
         
     
@@ -807,15 +928,15 @@ class ItemFileBP(JsonResource):
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("'minecraft:item'.components", self.data):
-            self.__components.append(Component(self, path, data))
+            self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     
     
     
-class EntityFileRP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class EntityFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations = []
         
     
@@ -831,15 +952,15 @@ class EntityFileRP(JsonResource):
     @cached_property
     def animations(self) -> list[AnimationRP]:
         for path, data in self.get_data_at("'minecraft:client_entity'.description.animations.*", self.data):
-            self.__animations.append(AnimationRP(self, path, data))
+            self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
     
     
     
     
-class AnimationFileRP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class AnimationFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations = []
         
     
@@ -855,15 +976,15 @@ class AnimationFileRP(JsonResource):
     @cached_property
     def animations(self) -> list[AnimationRP]:
         for path, data in self.get_data_at("animations.*", self.data):
-            self.__animations.append(AnimationRP(self, path, data))
+            self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
     
     
     
     
-class EntityFileBP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class EntityFileBP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__component_groups = []
         self.__components = []
         self.__events = []
@@ -889,19 +1010,19 @@ class EntityFileBP(JsonResource):
     @cached_property
     def component_groups(self) -> list[ComponentGroup]:
         for path, data in self.get_data_at("'minecraft:entity'.component_groups.*", self.data):
-            self.__component_groups.append(ComponentGroup(self, path, data))
+            self.__component_groups.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__component_groups
     
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("'minecraft:entity'.components.*", self.data):
-            self.__components.append(Component(self, path, data))
+            self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     @cached_property
     def events(self) -> list[Event]:
         for path, data in self.get_data_at("'minecraft:entity'.events.*", self.data):
-            self.__events.append(Event(self, path, data))
+            self.__events.append(Event(parent = self, json_path = path, data = data))
         return self.__events
     
     
@@ -931,9 +1052,9 @@ class EntityFileBP(JsonResource):
         return new_object
 
     
-class ModelFileRP(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class ModelFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__models = []
         
     
@@ -941,15 +1062,15 @@ class ModelFileRP(JsonResource):
     @cached_property
     def models(self) -> list[Model]:
         for path, data in self.get_data_at("'minecraft:geometry'.*", self.data):
-            self.__models.append(Model(self, path, data))
+            self.__models.append(Model(parent = self, json_path = path, data = data))
         return self.__models
     
     
     
     
-class AnimationControllerFile(JsonResource):
-    def __init__(self, pack: Pack, file_path: str, data: dict = None) -> None:
-        super().__init__(pack, file_path, data)
+class AnimationControllerFile(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
         
     
@@ -957,15 +1078,15 @@ class AnimationControllerFile(JsonResource):
     @cached_property
     def animation_controllers(self) -> list[AnimationController]:
         for path, data in self.get_data_at("animation_controllers.*", self.data):
-            self.__animation_controllers.append(AnimationController(self, path, data))
+            self.__animation_controllers.append(AnimationController(parent = self, json_path = path, data = data))
         return self.__animation_controllers
     
     
     
     
-class AnimationControllerRP(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class AnimationControllerRP(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         
     
@@ -973,9 +1094,9 @@ class AnimationControllerRP(SubResource):
     
     
     
-class LootTablePool(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class LootTablePool(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         
     
@@ -983,9 +1104,9 @@ class LootTablePool(SubResource):
     
     
     
-class AnimationControllerState(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class AnimationControllerState(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         
     
@@ -993,9 +1114,9 @@ class AnimationControllerState(SubResource):
     
     
     
-class Model(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class Model(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__bones = []
         
@@ -1003,7 +1124,7 @@ class Model(SubResource):
     @cached_property
     def bones(self) -> list[Bone]:
         for path, data in self.get_data_at("bones.*", self.data):
-            self.__bones.append(Bone(self, path, data))
+            self.__bones.append(Bone(parent = self, json_path = path, data = data))
         return self.__bones
     
     
@@ -1018,9 +1139,9 @@ class Model(SubResource):
     
     
     
-class AnimationRP(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class AnimationRP(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         
     
@@ -1028,9 +1149,9 @@ class AnimationRP(SubResource):
     
     
     
-class AnimationController(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class AnimationController(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__states = []
         
@@ -1038,16 +1159,16 @@ class AnimationController(SubResource):
     @cached_property
     def states(self) -> list[AnimationControllerState]:
         for path, data in self.get_data_at("states.*", self.data):
-            self.__states.append(AnimationControllerState(self, path, data))
+            self.__states.append(AnimationControllerState(parent = self, json_path = path, data = data))
         return self.__states
     
     
     
     
     
-class ComponentGroup(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class ComponentGroup(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__components = []
         
@@ -1055,7 +1176,7 @@ class ComponentGroup(SubResource):
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("*", self.data):
-            self.__components.append(Component(self, path, data))
+            self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     
@@ -1068,9 +1189,9 @@ class ComponentGroup(SubResource):
         return new_object
 
     
-class Component(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict , component_group: ComponentGroup = None) -> None:
-        super().__init__(parent, json_path, data)
+class Component(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None , component_group: ComponentGroup = None) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         
     
@@ -1078,9 +1199,9 @@ class Component(SubResource):
     
     
     
-class Event(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class Event(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__groups_to_add = []
         self.__groups_to_remove = []
@@ -1089,22 +1210,22 @@ class Event(SubResource):
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
         for path, data in self.get_data_at("add.component_groups.*", self.data):
-            self.__groups_to_add.append(ComponentGroup(self, path, data))
+            self.__groups_to_add.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_add
     
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
         for path, data in self.get_data_at("remove.component_groups.*", self.data):
-            self.__groups_to_remove.append(ComponentGroup(self, path, data))
+            self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_remove
     
     
     
     
     
-class Bone(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class Bone(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__cubes = []
         
@@ -1112,16 +1233,16 @@ class Bone(SubResource):
     @cached_property
     def cubes(self) -> list[Cube]:
         for path, data in self.get_data_at("cubes.*", self.data):
-            self.__cubes.append(Cube(self, path, data))
+            self.__cubes.append(Cube(parent = self, json_path = path, data = data))
         return self.__cubes
     
     
     
     
     
-class Cube(SubResource):
-    def __init__(self, parent: JsonResource, json_path: str, data: dict ) -> None:
-        super().__init__(parent, json_path, data)
+class Cube(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
         
         
     
