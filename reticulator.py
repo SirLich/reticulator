@@ -1,7 +1,9 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import re
 import os
 import json
+from pathlib import Path
 import glob
 from functools import cached_property
 from io import TextIOWrapper
@@ -10,6 +12,27 @@ from send2trash import send2trash
 # Constants
 
 DOT_MATCHER_REGEX = re.compile(r"\.(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)")
+
+# Globals
+
+def create_nested_directory(path: str):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+def freeze(o):
+    if isinstance(o,dict):
+        return frozenset({ k:freeze(v) for k,v in o.items()}.items())
+
+    if isinstance(o,list):
+        return tuple([freeze(v) for v in o])
+    
+    return o
+
+
+def make_hash(o):
+    """
+    makes a hash out of anything that contains only list,dict and hashable types including string and numeric types
+    """
+    return hash(freeze(o))
 
 # region exceptions
 class ReticulatorException(Exception):
@@ -134,22 +157,18 @@ class Resource():
         # Public
         self.pack = pack
         self.file = file
-
-        # Protected
-        self._data = None
         self._dirty = False
 
         # Private
         self.__resources: Resource = []
 
-
     @property
     def dirty(self):
-        raise NotImplementedError
+        return self._dirty
 
     @dirty.setter
     def dirty(self, dirty):
-        raise NotImplementedError
+        self._dirty = dirty
 
     def register_resource(self, resource):
         """
@@ -168,7 +187,11 @@ class Resource():
         return True
 
     def _save(self, force=False):
-        """Internal implementation of asset saving."""
+        """
+        Internal implementation of asset saving.
+        
+        Should always be implemented.
+        """
         raise NotImplementedError()
 
     def _delete(self, force=False):
@@ -191,7 +214,7 @@ class Resource():
                 resource.save(force=force)
 
             # Internal save handling
-            self._save()
+            self._save(force=force)
             self.dirty = False
 
     def delete(self, force=False):
@@ -220,11 +243,18 @@ class FileResource(Resource):
     """
     def __init__(self, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(file=self, pack=pack)
-
+        
+        # All files must register with their pack
+        self.pack.register_resource(self)
+        
         # Public
         self.file_path = file_path
-        if file_path: 
+
+        if file_path:
             self.file_name = os.path.basename(file_path)
+
+        # Protected
+        self.__hash = self._create_hash()
 
         # Private
         self.__mark_for_deletion: bool = False
@@ -237,7 +267,16 @@ class FileResource(Resource):
         return not self.__mark_for_deletion and super()._should_delete()
 
     def _should_save(self):
-        return not self.__mark_for_deletion and super()._should_save()
+        # Files that have been deleted cannot be saved
+        if self.__mark_for_deletion:
+            return False
+
+        return self.__hash != self._create_hash() or super()._should_save()
+
+    def _create_hash(self):
+        # If a file doesn't want to implement a hash, then the file will always
+        # be treated as the same, allowing other checks to take control.
+        return 0
 
 class JsonResource(Resource):
     """
@@ -339,28 +378,11 @@ class JsonFileResource(FileResource, JsonResource):
         FileResource.__init__(self, file_path=file_path, pack=pack)
         
         if data != None:
-            self._data = NotifyDict(data, owner=self)
+            self.data = NotifyDict(data, owner=self)
         else:
-            self._data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
+            self.data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
 
-        JsonResource.__init__(self, data=self._data, file=self, pack=pack)
-
-    @property
-    def data(self):
-        return self._data
-
-    @data.setter
-    def data(self, data):
-        self.dirty = True
-        self._data = data
-
-    @property
-    def dirty(self):
-        return self._dirty
-    
-    @dirty.setter
-    def dirty(self, dirty):
-        self._dirty = dirty
+        JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
     def _should_save(self):
         return not self.__mark_for_deletion and super()._should_save()
@@ -370,6 +392,9 @@ class JsonFileResource(FileResource, JsonResource):
 
     def delete(self):
         self.__mark_for_deletion = True
+
+    def _create_hash(self):
+        return make_hash(self.data)
 
 class JsonSubResource(JsonResource):
     """
@@ -422,14 +447,80 @@ class JsonSubResource(JsonResource):
         self.parent.dirty = True
         self.remove_value_at(self.json_path, self.parent.data)
 
+@dataclass
+class Translation:
+    key: str
+    value: str
+    comment: str
+
 class LanguageFile(FileResource):
     def __init__(self, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(file_path=file_path, pack=pack)
+        self.__translations: list[Translation] = []   
+    
+    def contains_translation(self, key: str) -> bool:
+        """
+        Whether the language file contains the specified key.
+        """
+
+        for translation in self.translations:
+            if translation.key == key:
+                return True
+        return False
+
+    def delete_translation(self, key: str) -> None:
+        """
+        Deletes a translation based on key, if it exists.
+        """
+        for translation in self.translations:
+            if translation.key == key:
+                self.dirty = True
+                self.translations.remove(translation)
+                return
+
+    def add_translation(self, translation: Translation, overwrite: bool = True) -> bool:
+        """
+        Adds a new translation key. Overwrites by default.
+        """
+
+        # We must complain about duplicates, unless
+        if not overwrite and self.contains_translation(translation.key):
+            self.dirty = True
+            self.__translations.append(translation)
+            return True
+        
+        return False
+    
+    def _save(self, force=False):
+        path = os.path.join(self.pack.output_path, self.file_path)
+        create_nested_directory(path)
+        with open(path, 'w', encoding='utf-8') as file:
+            for translation in self.translations:
+                file.write(f"{translation.key}={translation.value}\t##{translation.comment}\n")
+
+    @cached_property
+    def translations(self) -> list[Translation]:
+        with open(os.path.join(self.pack.input_path, self.file_path), "r", encoding='utf-8') as language_file:
+            for line in language_file.readlines():
+                language_regex = "^([^#\n]+?)=([^#]+)#*?([^#]*?)$"
+                if match := re.search(language_regex, line):
+                    groups = match.groups()
+                    self.__translations.append(
+                        Translation(
+                            key = groups[0].strip() if len(groups) > 0 else "",
+                            value = groups[1].strip() if len(groups) > 1 else "",
+                            comment = groups[2].strip() if len(groups) > 2 else "",
+                        )
+                    )
+                else:
+                    print("NOGO", line)
+        return self.__translations
 
 
 class Pack():
     def __init__(self, input_path: str, project=None):
         self.resources = []
+        self.__language_files = []
         self.__project = project
         self.input_path = input_path
         self.output_path = input_path
@@ -459,7 +550,23 @@ class Pack():
 
     def register_resource(self, resource):
         self.resources.append(resource)
-        
+
+    def get_language_file(self, file_name:str) -> LanguageFile:
+        for language_file in self.language_files:
+            if language_file.file_name == file_name:
+                return language_file
+        raise AssetNotFoundError(file_name)
+
+    @cached_property
+    def language_files(self) -> list[LanguageFile]:
+        base_directory = os.path.join(self.input_path, "texts")
+        for local_path in glob.glob(base_directory + "/**/*.lang", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__language_files.append(LanguageFile(file_path = local_path, pack = self))
+            
+        return self.__language_files
+
+    ## TODO: Move these static methods OUT
     @staticmethod
     def get_json_from_path(path:str) -> dict:
         with open(path, "r") as fh:
