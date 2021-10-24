@@ -8,6 +8,8 @@ import glob
 from functools import cached_property
 from io import TextIOWrapper
 from send2trash import send2trash
+import copy
+import dpath.util
 
 # Constants
 
@@ -306,44 +308,34 @@ class JsonResource(Resource):
     def __str__(self):
         return json.dumps(self.data, indent=2)
 
-    def remove_value_at(self, json_path, data):
-        try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-            final = keys.pop().strip("'")
-            for key in keys:
-                data = data[key.strip("'")]
-            del data[final]
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
-            
-    def set_value_at(self, json_path, data: dict, insert_data: dict):
-        try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-            final = keys.pop().strip("'")
-            for key in keys:
-                data = data[key.strip("'")]
-            
-            # If number, then cast
-            print(final)
-            if '[' in final:
-                final = int(final.strip('[]'))
+    # Removes value at jsonpath location
+    def remove_value_at(self, json_path):
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        keys = [key.strip("'") for key in keys]
+        dpath.util.delete(self.data, keys)
 
-            data[final] = insert_data
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
+    def pop_value_at(self, json_path):
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        keys = [key.strip("'") for key in keys]
+        data = dpath.util.get(self.data, keys)
+        dpath.util.delete(self.data, keys)
+        return data
+
+    # Sets value at jsonpath location
+    def set_value_at(self, json_path, insert_value: any):
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        keys = [key.strip("'") for key in keys]
+        dpath.util.set(self.data, keys, insert_value)
 
 
-    def get_value_at(self, json_path, data):
-        try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-            for key in keys:
-                data = data[key.strip("'")]
-            
-            return data
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
+    # Gets value at jsonpath location
+    def get_value_at(self, json_path):
+        keys = DOT_MATCHER_REGEX.split(json_path)
+        keys = [key.strip("'") for key in keys]
+        return dpath.util.get(self.data, keys)
 
-    def get_data_at(self, json_path, data):
+    #  TODO What does this do???
+    def get_data_at(self, json_path):
         try:
             keys = DOT_MATCHER_REGEX.split(json_path)
 
@@ -352,22 +344,21 @@ class JsonResource(Resource):
                 raise AmbiguousAssetError('get_data_at used with non-ambiguous path', json_path)
 
             for key in keys:
-                data = data.get(key.strip("'"), {})
+                self.data = self.data.get(key.strip("'"), {})
             
             base = json_path.strip("*")
 
-            if isinstance(data, dict):
-                for key in data.keys():
-                    yield base + f"'{key}'", data[key]
-            elif isinstance(data, list):
-                for i, element in enumerate(data):
+            if isinstance(self.data, dict):
+                for key in self.data.keys():
+                    yield base + f"'{key}'", self.data[key]
+            elif isinstance(self.data, list):
+                for i, element in enumerate(self.data):
                     yield base + f"[{i}]", element
             else:
                 raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
             
-
         except KeyError as key_error:
-            raise AssetNotFoundError(json_path, data) from key_error
+            raise AssetNotFoundError(json_path, self.data) from key_error
 
 class JsonFileResource(FileResource, JsonResource):
     """
@@ -384,8 +375,6 @@ class JsonFileResource(FileResource, JsonResource):
 
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
-    def _should_save(self):
-        return not self.__mark_for_deletion and super()._should_save()
 
     def _save(self, force):
         self.pack.save_json(self.file_path, self.data)
@@ -445,7 +434,7 @@ class JsonSubResource(JsonResource):
 
     def delete(self):
         self.parent.dirty = True
-        self.remove_value_at(self.json_path, self.parent.data)
+        self.parent.remove_value_at(self.json_path)
 
 @dataclass
 class Translation:
@@ -484,13 +473,14 @@ class LanguageFile(FileResource):
         """
 
         # We must complain about duplicates, unless
-        if not overwrite and self.contains_translation(translation.key):
-            self.dirty = True
-            self.__translations.append(translation)
-            return True
-        
-        return False
-    
+        if self.contains_translation(translation.key) and not overwrite:
+            return False
+
+        self.dirty = True
+        self.__translations.append(translation)
+
+        return True
+            
     def _save(self, force=False):
         path = os.path.join(self.pack.output_path, self.file_path)
         create_nested_directory(path)

@@ -129,7 +129,20 @@
                 {
                     "class": "ItemFileBP",
                     "name": "items",
-                    "file_path": "items"
+                    "file_path": "items",
+                    "getter": {
+                        "name": "get_item",
+                        "property": "identifier"
+                    }
+                },
+                {
+                    "class": "BlockFileBP",
+                    "name": "blocks",
+                    "file_path": "blocks",
+                    "getter": {
+                        "name": "get_block",
+                        "property": "identifier"
+                    }
                 }
             ]
         }
@@ -234,6 +247,22 @@
                     "class": "Component",
                     "name": "components",
                     "json_path": "'minecraft:item'.components"
+                }
+            ]
+        },
+        {
+            "class": "BlockFileBP",
+            "properties": [
+                {
+                    "json_path": "minecraft:block.description.identifier",
+                    "name": "identifier"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "class": "Component",
+                    "name": "components",
+                    "json_path": "minecraft:block.components"
                 }
             ]
         },
