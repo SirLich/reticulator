@@ -303,57 +303,44 @@ class JsonResource(Resource):
         
         return raw_data
 
-    # TODO: Make all these methods into using self.data.
-
     def __str__(self):
-        return json.dumps(self.data, indent=2)
+        return json.dumps(self.data, indent=2, ensure_ascii=False)
+
+    # TODO: Add some kind of trycatch for these methods
 
     # Removes value at jsonpath location
     def remove_value_at(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        dpath.util.delete(self.data, keys)
+        dpath.util.delete(self.data, json_path)
 
     def pop_value_at(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        data = dpath.util.get(self.data, keys)
-        dpath.util.delete(self.data, keys)
+        data = dpath.util.get(self.data, json_path)
+        dpath.util.delete(self.data, json_path)
         return data
 
     # Sets value at jsonpath location
     def set_value_at(self, json_path, insert_value: any):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        dpath.util.set(self.data, keys, insert_value)
-
+        dpath.util.set(self.data, json_path, insert_value)
 
     # Gets value at jsonpath location
     def get_value_at(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        return dpath.util.get(self.data, keys)
+        return dpath.util.get(self.data, json_path)
 
-    #  TODO What does this do???
+    # Gets a list of values found at this jsonpath location
     def get_data_at(self, json_path):
         try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
+            # Get Data at has a special syntax, to make it clear you are getting a list
+            if not json_path.endswith("*"):
+                raise AmbiguousAssetError('Data get must end with *', json_path)
+            json_path = json_path[:-2]
 
-            # Last key should always be be *
-            if keys.pop().strip("'") != '*':
-                raise AmbiguousAssetError('get_data_at used with non-ambiguous path', json_path)
-
-            for key in keys:
-                self.data = self.data.get(key.strip("'"), {})
+            result = self.get_value_at(json_path)
             
-            base = json_path.strip("*")
-
-            if isinstance(self.data, dict):
-                for key in self.data.keys():
-                    yield base + f"'{key}'", self.data[key]
-            elif isinstance(self.data, list):
-                for i, element in enumerate(self.data):
-                    yield base + f"[{i}]", element
+            if isinstance(result, dict):
+                for key in result.keys():
+                    yield json_path + f"/{key}", result[key]
+            elif isinstance(result, list):
+                for i, element in enumerate(result):
+                    yield json_path + f"/[{i}]", element
             else:
                 raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
             
@@ -400,8 +387,7 @@ class JsonSubResource(JsonResource):
 
 
     def get_id_from_jsonpath(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        return keys[len(keys) - 1].replace("'", "")
+        return json_path.split("/")[-1]
 
 
     def convert_to_notify(self, raw_data):
@@ -411,6 +397,9 @@ class JsonSubResource(JsonResource):
             return NotifyList(raw_data, owner=self)
         else:
             return raw_data
+
+    def __str__(self):
+        return f'"{self.id}": {json.dumps(self.data, indent=2, ensure_ascii=False)}'
 
     @property
     def dirty(self):
@@ -589,7 +578,7 @@ class Pack():
             os.makedirs(os.path.dirname(file_path))
 
         with open(file_path, "w+") as f:
-            return json.dump(data, f, indent=2)
+            return json.dump(data, f, indent=2, ensure_ascii=False).encode('utf-8')
 
 class Project():
     def __init__(self, behavior_path: str, resource_path: str):
@@ -880,11 +869,11 @@ class FeatureRulesFileBP(JsonFileResource):
     
     @property
     def identifier(self):
-        return self.get_value_at("minecraft:feature_rules.description.identifier")
+        return self.get_value_at("minecraft:feature_rules/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("minecraft:feature_rules.description.identifier", identifier)
+        return self.set_value_at("minecraft:feature_rules/description/identifier", identifier)
 
     @property
     def format_version(self):
@@ -916,7 +905,7 @@ class AnimationControllerFileRP(JsonFileResource):
     
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
-        for path, data in self.get_data_at("animation_controllers.*"):
+        for path, data in self.get_data_at("animation_controllers/*"):
             self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
         return self.__animation_controllers
     
@@ -929,31 +918,6 @@ class AnimationControllerFileRP(JsonFileResource):
 
     
     
-class RecipeFile(JsonFileResource):
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
-        
-    
-    @property
-    def identifier(self):
-        return self.get_value_at("('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier")
-    
-    @identifier.setter
-    def identifier(self, identifier):
-        return self.set_value_at("('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier", identifier)
-
-    @property
-    def format_version(self):
-        return self.get_value_at("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_value_at("format_version", format_version)
-
-    
-    
-    
-    
 class SpawnRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -961,11 +925,11 @@ class SpawnRuleFile(JsonFileResource):
     
     @property
     def identifier(self):
-        return self.get_value_at("'minecraft:spawn_rules.description'.identifier")
+        return self.get_value_at("minecraft:spawn_rules/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("'minecraft:spawn_rules.description'.identifier", identifier)
+        return self.set_value_at("minecraft:spawn_rules/description/identifier", identifier)
 
     @property
     def format_version(self):
@@ -988,7 +952,7 @@ class LootTableFile(JsonFileResource):
     
     @cached_property
     def pools(self) -> list[LootTablePool]:
-        for path, data in self.get_data_at("pools.*"):
+        for path, data in self.get_data_at("pools/*"):
             self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
     
@@ -1003,11 +967,11 @@ class ItemFileRP(JsonFileResource):
     
     @property
     def identifier(self):
-        return self.get_value_at("'minecraft:item'.description.identifier")
+        return self.get_value_at("minecraft:item/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("'minecraft:item'.description.identifier", identifier)
+        return self.set_value_at("minecraft:item/description/identifier", identifier)
 
     @property
     def format_version(self):
@@ -1020,7 +984,7 @@ class ItemFileRP(JsonFileResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("'minecraft:item'.components.*"):
+        for path, data in self.get_data_at("minecraft:item/components/*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1035,16 +999,16 @@ class ItemFileBP(JsonFileResource):
     
     @property
     def identifier(self):
-        return self.get_value_at("'minecraft:item'.description.identifier")
+        return self.get_value_at("minecraft:item/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("'minecraft:item'.description.identifier", identifier)
+        return self.set_value_at("minecraft:item/description/identifier", identifier)
 
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("'minecraft:item'.components"):
+        for path, data in self.get_data_at("minecraft:item/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1059,16 +1023,16 @@ class BlockFileBP(JsonFileResource):
     
     @property
     def identifier(self):
-        return self.get_value_at("minecraft:block.description.identifier")
+        return self.get_value_at("minecraft:block/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("minecraft:block.description.identifier", identifier)
+        return self.set_value_at("minecraft:block/description/identifier", identifier)
 
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("minecraft:block.components"):
+        for path, data in self.get_data_at("minecraft:block/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1083,16 +1047,16 @@ class EntityFileRP(JsonFileResource):
     
     @property
     def identifier(self):
-        return self.get_value_at("'minecraft:client_entity'.description.identifier")
+        return self.get_value_at("minecraft:client_entity/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("'minecraft:client_entity'.description.identifier", identifier)
+        return self.set_value_at("minecraft:client_entity/description/identifier", identifier)
 
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        for path, data in self.get_data_at("'minecraft:client_entity'.description.animations.*"):
+        for path, data in self.get_data_at("minecraft:client_entity/description/animations/*"):
             self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
     
@@ -1116,7 +1080,7 @@ class AnimationFileRP(JsonFileResource):
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        for path, data in self.get_data_at("animations.*"):
+        for path, data in self.get_data_at("animations/*"):
             self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
     
@@ -1141,28 +1105,28 @@ class EntityFileBP(JsonFileResource):
 
     @property
     def identifier(self):
-        return self.get_value_at("'minecraft:entity'.description.identifier")
+        return self.get_value_at("minecraft:entity/description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("'minecraft:entity'.description.identifier", identifier)
+        return self.set_value_at("minecraft:entity/description/identifier", identifier)
 
     
     @cached_property
     def component_groups(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("'minecraft:entity'.component_groups.*"):
+        for path, data in self.get_data_at("minecraft:entity/component_groups/*"):
             self.__component_groups.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__component_groups
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("'minecraft:entity'.components.*"):
+        for path, data in self.get_data_at("minecraft:entity/components/*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     @cached_property
     def events(self) -> list[Event]:
-        for path, data in self.get_data_at("'minecraft:entity'.events.*"):
+        for path, data in self.get_data_at("minecraft:entity/events/*"):
             self.__events.append(Event(parent = self, json_path = path, data = data))
         return self.__events
     
@@ -1181,14 +1145,14 @@ class EntityFileBP(JsonFileResource):
 
     
     def create_component_group(self, name: str, data: dict) -> ComponentGroup:
-        self.set_value_at("'minecraft:entity'.component_groups." + name, data)
-        new_object = ComponentGroup(self, "'minecraft:entity'.component_groups." + name, data)
+        self.set_value_at("minecraft:entity/component_groups/." + name, data)
+        new_object = ComponentGroup(self, "minecraft:entity/component_groups/." + name, data)
         self.__component_groups.append(new_object)
         return new_object
 
     def create_component(self, name: str, data: dict) -> Component:
-        self.set_value_at("'minecraft:entity'.components." + name, data)
-        new_object = Component(self, "'minecraft:entity'.components." + name, data)
+        self.set_value_at("minecraft:entity/components/." + name, data)
+        new_object = Component(self, "minecraft:entity/components/." + name, data)
         self.__components.append(new_object)
         return new_object
 
@@ -1202,7 +1166,7 @@ class ModelFileRP(JsonFileResource):
     
     @cached_property
     def models(self) -> list[Model]:
-        for path, data in self.get_data_at("'minecraft:geometry'.*"):
+        for path, data in self.get_data_at("minecraft:geometry/*"):
             self.__models.append(Model(parent = self, json_path = path, data = data))
         return self.__models
     
@@ -1218,7 +1182,7 @@ class AnimationControllerFile(JsonFileResource):
     
     @cached_property
     def animation_controllers(self) -> list[AnimationController]:
-        for path, data in self.get_data_at("animation_controllers.*"):
+        for path, data in self.get_data_at("animation_controllers/*"):
             self.__animation_controllers.append(AnimationController(parent = self, json_path = path, data = data))
         return self.__animation_controllers
     
@@ -1264,18 +1228,18 @@ class Model(JsonSubResource):
     
     @cached_property
     def bones(self) -> list[Bone]:
-        for path, data in self.get_data_at("bones.*"):
+        for path, data in self.get_data_at("bones/*"):
             self.__bones.append(Bone(parent = self, json_path = path, data = data))
         return self.__bones
     
     
     @property
     def identifier(self):
-        return self.get_value_at("description.identifier")
+        return self.get_value_at("description/identifier")
     
     @identifier.setter
     def identifier(self, identifier):
-        return self.set_value_at("description.identifier", identifier)
+        return self.set_value_at("description/identifier", identifier)
 
     
     
@@ -1299,7 +1263,7 @@ class AnimationController(JsonSubResource):
     
     @cached_property
     def states(self) -> list[AnimationControllerState]:
-        for path, data in self.get_data_at("states.*"):
+        for path, data in self.get_data_at("states/*"):
             self.__states.append(AnimationControllerState(parent = self, json_path = path, data = data))
         return self.__states
     
@@ -1350,13 +1314,13 @@ class Event(JsonSubResource):
     
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("add.component_groups.*"):
+        for path, data in self.get_data_at("add/component_groups/*"):
             self.__groups_to_add.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_add
     
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("remove.component_groups.*"):
+        for path, data in self.get_data_at("remove/component_groups/*"):
             self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_remove
     
@@ -1373,7 +1337,7 @@ class Bone(JsonSubResource):
     
     @cached_property
     def cubes(self) -> list[Cube]:
-        for path, data in self.get_data_at("cubes.*"):
+        for path, data in self.get_data_at("cubes/*"):
             self.__cubes.append(Cube(parent = self, json_path = path, data = data))
         return self.__cubes
     

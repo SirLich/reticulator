@@ -303,57 +303,44 @@ class JsonResource(Resource):
         
         return raw_data
 
-    # TODO: Make all these methods into using self.data.
-
     def __str__(self):
-        return json.dumps(self.data, indent=2)
+        return json.dumps(self.data, indent=2, ensure_ascii=False)
+
+    # TODO: Add some kind of trycatch for these methods
 
     # Removes value at jsonpath location
     def remove_value_at(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        dpath.util.delete(self.data, keys)
+        dpath.util.delete(self.data, json_path)
 
     def pop_value_at(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        data = dpath.util.get(self.data, keys)
-        dpath.util.delete(self.data, keys)
+        data = dpath.util.get(self.data, json_path)
+        dpath.util.delete(self.data, json_path)
         return data
 
     # Sets value at jsonpath location
     def set_value_at(self, json_path, insert_value: any):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        dpath.util.set(self.data, keys, insert_value)
-
+        dpath.util.set(self.data, json_path, insert_value)
 
     # Gets value at jsonpath location
     def get_value_at(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        keys = [key.strip("'") for key in keys]
-        return dpath.util.get(self.data, keys)
+        return dpath.util.get(self.data, json_path)
 
-    #  TODO What does this do???
+    # Gets a list of values found at this jsonpath location
     def get_data_at(self, json_path):
         try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
+            # Get Data at has a special syntax, to make it clear you are getting a list
+            if not json_path.endswith("*"):
+                raise AmbiguousAssetError('Data get must end with *', json_path)
+            json_path = json_path[:-2]
 
-            # Last key should always be be *
-            if keys.pop().strip("'") != '*':
-                raise AmbiguousAssetError('get_data_at used with non-ambiguous path', json_path)
-
-            for key in keys:
-                self.data = self.data.get(key.strip("'"), {})
+            result = self.get_value_at(json_path)
             
-            base = json_path.strip("*")
-
-            if isinstance(self.data, dict):
-                for key in self.data.keys():
-                    yield base + f"'{key}'", self.data[key]
-            elif isinstance(self.data, list):
-                for i, element in enumerate(self.data):
-                    yield base + f"[{i}]", element
+            if isinstance(result, dict):
+                for key in result.keys():
+                    yield json_path + f"/{key}", result[key]
+            elif isinstance(result, list):
+                for i, element in enumerate(result):
+                    yield json_path + f"/[{i}]", element
             else:
                 raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
             
@@ -400,8 +387,7 @@ class JsonSubResource(JsonResource):
 
 
     def get_id_from_jsonpath(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        return keys[len(keys) - 1].replace("'", "")
+        return json_path.split("/")[-1]
 
 
     def convert_to_notify(self, raw_data):
@@ -411,6 +397,9 @@ class JsonSubResource(JsonResource):
             return NotifyList(raw_data, owner=self)
         else:
             return raw_data
+
+    def __str__(self):
+        return f'"{self.id}": {json.dumps(self.data, indent=2, ensure_ascii=False)}'
 
     @property
     def dirty(self):
@@ -589,7 +578,7 @@ class Pack():
             os.makedirs(os.path.dirname(file_path))
 
         with open(file_path, "w+") as f:
-            return json.dump(data, f, indent=2)
+            return json.dump(data, f, indent=2, ensure_ascii=False).encode('utf-8')
 
 class Project():
     def __init__(self, behavior_path: str, resource_path: str):
