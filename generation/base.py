@@ -578,7 +578,7 @@ class Pack():
             os.makedirs(os.path.dirname(file_path))
 
         with open(file_path, "w+") as f:
-            return json.dump(data, f, indent=2, ensure_ascii=False).encode('utf-8')
+            return json.dump(data, f, indent=2, ensure_ascii=False)
 
 class Project():
     def __init__(self, behavior_path: str, resource_path: str):
