@@ -8,6 +8,8 @@ import glob
 from functools import cached_property
 from io import TextIOWrapper
 from send2trash import send2trash
+import copy
+import dpath.util
 
 # Constants
 
@@ -301,73 +303,49 @@ class JsonResource(Resource):
         
         return raw_data
 
-    # TODO: Make all these methods into using self.data.
-
     def __str__(self):
-        return json.dumps(self.data, indent=2)
+        return json.dumps(self.data, indent=2, ensure_ascii=False)
 
-    def remove_value_at(self, json_path, data):
+    # TODO: Add some kind of trycatch for these methods
+
+    # Removes value at jsonpath location
+    def remove_value_at(self, json_path):
+        dpath.util.delete(self.data, json_path)
+
+    def pop_value_at(self, json_path):
+        data = dpath.util.get(self.data, json_path)
+        dpath.util.delete(self.data, json_path)
+        return data
+
+    # Sets value at jsonpath location
+    def set_value_at(self, json_path, insert_value: any):
+        dpath.util.set(self.data, json_path, insert_value)
+
+    # Gets value at jsonpath location
+    def get_value_at(self, json_path):
+        return dpath.util.get(self.data, json_path)
+
+    # Gets a list of values found at this jsonpath location
+    def get_data_at(self, json_path):
         try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-            final = keys.pop().strip("'")
-            for key in keys:
-                data = data[key.strip("'")]
-            del data[final]
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
+            # Get Data at has a special syntax, to make it clear you are getting a list
+            if not json_path.endswith("*"):
+                raise AmbiguousAssetError('Data get must end with *', json_path)
+            json_path = json_path[:-2]
+
+            result = self.get_value_at(json_path)
             
-    def set_value_at(self, json_path, data: dict, insert_data: dict):
-        try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-            final = keys.pop().strip("'")
-            for key in keys:
-                data = data[key.strip("'")]
-            
-            # If number, then cast
-            print(final)
-            if '[' in final:
-                final = int(final.strip('[]'))
-
-            data[final] = insert_data
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
-
-
-    def get_value_at(self, json_path, data):
-        try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-            for key in keys:
-                data = data[key.strip("'")]
-            
-            return data
-        except KeyError:
-            raise AssetNotFoundError(json_path, data)
-
-    def get_data_at(self, json_path, data):
-        try:
-            keys = DOT_MATCHER_REGEX.split(json_path)
-
-            # Last key should always be be *
-            if keys.pop().strip("'") != '*':
-                raise AmbiguousAssetError('get_data_at used with non-ambiguous path', json_path)
-
-            for key in keys:
-                data = data.get(key.strip("'"), {})
-            
-            base = json_path.strip("*")
-
-            if isinstance(data, dict):
-                for key in data.keys():
-                    yield base + f"'{key}'", data[key]
-            elif isinstance(data, list):
-                for i, element in enumerate(data):
-                    yield base + f"[{i}]", element
+            if isinstance(result, dict):
+                for key in result.keys():
+                    yield json_path + f"/{key}", result[key]
+            elif isinstance(result, list):
+                for i, element in enumerate(result):
+                    yield json_path + f"/[{i}]", element
             else:
                 raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
             
-
         except KeyError as key_error:
-            raise AssetNotFoundError(json_path, data) from key_error
+            raise AssetNotFoundError(json_path, self.data) from key_error
 
 class JsonFileResource(FileResource, JsonResource):
     """
@@ -384,8 +362,6 @@ class JsonFileResource(FileResource, JsonResource):
 
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
-    def _should_save(self):
-        return not self.__mark_for_deletion and super()._should_save()
 
     def _save(self, force):
         self.pack.save_json(self.file_path, self.data)
@@ -411,8 +387,7 @@ class JsonSubResource(JsonResource):
 
 
     def get_id_from_jsonpath(self, json_path):
-        keys = DOT_MATCHER_REGEX.split(json_path)
-        return keys[len(keys) - 1].replace("'", "")
+        return json_path.split("/")[-1]
 
 
     def convert_to_notify(self, raw_data):
@@ -422,6 +397,9 @@ class JsonSubResource(JsonResource):
             return NotifyList(raw_data, owner=self)
         else:
             return raw_data
+
+    def __str__(self):
+        return f'"{self.id}": {json.dumps(self.data, indent=2, ensure_ascii=False)}'
 
     @property
     def dirty(self):
@@ -445,7 +423,7 @@ class JsonSubResource(JsonResource):
 
     def delete(self):
         self.parent.dirty = True
-        self.remove_value_at(self.json_path, self.parent.data)
+        self.parent.remove_value_at(self.json_path)
 
 @dataclass
 class Translation:
@@ -484,13 +462,14 @@ class LanguageFile(FileResource):
         """
 
         # We must complain about duplicates, unless
-        if not overwrite and self.contains_translation(translation.key):
-            self.dirty = True
-            self.__translations.append(translation)
-            return True
-        
-        return False
-    
+        if self.contains_translation(translation.key) and not overwrite:
+            return False
+
+        self.dirty = True
+        self.__translations.append(translation)
+
+        return True
+            
     def _save(self, force=False):
         path = os.path.join(self.pack.output_path, self.file_path)
         create_nested_directory(path)
@@ -599,7 +578,7 @@ class Pack():
             os.makedirs(os.path.dirname(file_path))
 
         with open(file_path, "w+") as f:
-            return json.dump(data, f, indent=2)
+            return json.dump(data, f, indent=2, ensure_ascii=False)
 
 class Project():
     def __init__(self, behavior_path: str, resource_path: str):

@@ -1,5 +1,5 @@
 {
-    "$schema": "./model-schema.json",
+    "$schema": "//model-schema/json",
     "packs": [
         {
             "class": "ResourcePack",
@@ -129,7 +129,20 @@
                 {
                     "class": "ItemFileBP",
                     "name": "items",
-                    "file_path": "items"
+                    "file_path": "items",
+                    "getter": {
+                        "name": "get_item",
+                        "property": "identifier"
+                    }
+                },
+                {
+                    "class": "BlockFileBP",
+                    "name": "blocks",
+                    "file_path": "blocks",
+                    "getter": {
+                        "name": "get_block",
+                        "property": "identifier"
+                    }
                 }
             ]
         }
@@ -140,7 +153,7 @@
             "properties": [
                 {
                     "name": "identifier",
-                    "json_path": "minecraft:feature_rules.description.identifier"
+                    "json_path": "minecraft:feature_rules/description/identifier"
                 },
                 {
                     "name": "format_version",
@@ -157,7 +170,7 @@
                 {
                     "class": "AnimationControllerRP",
                     "name": "animation_controllers",
-                    "json_path": "animation_controllers.*",
+                    "json_path": "animation_controllers/*",
                     "getter": {
                         "name": "get_animation_controller",
                         "property": "id"
@@ -166,24 +179,11 @@
             ]
         },
         {
-            "class": "RecipeFile",
-            "properties": [
-                {
-                    "name": "identifier",
-                    "json_path": "('minecraft:recipe_shaped'|'minecraft:recipe_shapeless'|'minecraft:recipe_brewing_mix'|'minecraft:recipe_furnace'|'minecraft:recipe_brewing_container').description.identifier"
-                },
-                {
-                    "name": "format_version",
-                    "json_path": "format_version"
-                }
-            ]
-        },
-        {
             "class": "SpawnRuleFile",
             "properties": [
                 {
                     "name": "identifier",
-                    "json_path": "'minecraft:spawn_rules.description'.identifier"
+                    "json_path": "minecraft:spawn_rules/description/identifier"
                 },
                 {
                     "name": "format_version",
@@ -197,7 +197,7 @@
                 {
                     "class": "LootTablePool",
                     "name": "pools",
-                    "json_path": "pools.*"
+                    "json_path": "pools/*"
                 }
             ]
         },
@@ -205,7 +205,7 @@
             "class": "ItemFileRP",
             "properties": [
                 {
-                    "json_path": "'minecraft:item'.description.identifier",
+                    "json_path": "minecraft:item/description/identifier",
                     "name": "identifier"
                 },
                 {
@@ -217,7 +217,7 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "json_path": "'minecraft:item'.components.*"
+                    "json_path": "minecraft:item/components/*"
                 }
             ]
         },
@@ -225,7 +225,7 @@
             "class": "ItemFileBP",
             "properties": [
                 {
-                    "json_path": "'minecraft:item'.description.identifier",
+                    "json_path": "minecraft:item/description/identifier",
                     "name": "identifier"
                 }
             ],
@@ -233,7 +233,23 @@
                 {
                     "class": "Component",
                     "name": "components",
-                    "json_path": "'minecraft:item'.components"
+                    "json_path": "minecraft:item/components"
+                }
+            ]
+        },
+        {
+            "class": "BlockFileBP",
+            "properties": [
+                {
+                    "json_path": "minecraft:block/description/identifier",
+                    "name": "identifier"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "class": "Component",
+                    "name": "components",
+                    "json_path": "minecraft:block/components"
                 }
             ]
         },
@@ -241,14 +257,14 @@
             "class": "EntityFileRP",
             "properties": [
                 {
-                    "json_path": "'minecraft:client_entity'.description.identifier",
+                    "json_path": "minecraft:client_entity/description/identifier",
                     "name": "identifier"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "AnimationRP",
-                    "json_path": "'minecraft:client_entity'.description.animations.*",
+                    "json_path": "minecraft:client_entity/description/animations/*",
                     "name": "animations"
                 }
             ]
@@ -264,7 +280,7 @@
             "sub_resources": [
                 {
                     "class": "AnimationRP",
-                    "json_path": "animations.*",
+                    "json_path": "animations/*",
                     "name": "animations"
                 }
             ]
@@ -277,14 +293,14 @@
                     "name": "format_version"
                 },
                 {
-                    "json_path": "'minecraft:entity'.description.identifier",
+                    "json_path": "minecraft:entity/description/identifier",
                     "name": "identifier"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "ComponentGroup",
-                    "json_path": "'minecraft:entity'.component_groups.*",
+                    "json_path": "minecraft:entity/component_groups/*",
                     "name": "component_groups",
                     "getter": {
                         "name": "get_component_group",
@@ -296,7 +312,7 @@
                 },
                 {
                     "class": "Component",
-                    "json_path": "'minecraft:entity'.components.*",
+                    "json_path": "minecraft:entity/components/*",
                     "name": "components",
                     "getter": {
                         "name": "get_component",
@@ -308,7 +324,7 @@
                 },
                 {
                     "class": "Event",
-                    "json_path": "'minecraft:entity'.events.*",
+                    "json_path": "minecraft:entity/events/*",
                     "name": "events"
                 }
             ]
@@ -319,7 +335,7 @@
                 {
                     "class": "Model",
                     "name": "models",
-                    "json_path": "'minecraft:geometry'.*"
+                    "json_path": "minecraft:geometry/*"
                 }
             ]
         },
@@ -329,7 +345,7 @@
                 {
                     "class": "AnimationController",
                     "name": "animation_controllers",
-                    "json_path": "animation_controllers.*"
+                    "json_path": "animation_controllers/*"
                 }
             ]
         }
@@ -349,13 +365,13 @@
             "properties": [
                 {
                     "name": "identifier",
-                    "json_path": "description.identifier"
+                    "json_path": "description/identifier"
                 }
             ],
             "sub_resources": [
                 {
                     "class": "Bone",
-                    "json_path": "bones.*",
+                    "json_path": "bones/*",
                     "name": "bones"
                 }
             ]
@@ -368,7 +384,7 @@
             "sub_resources": [
                 {
                     "class": "AnimationControllerState",
-                    "json_path": "states.*",
+                    "json_path": "states/*",
                     "name": "states"
                 }
             ]
@@ -402,12 +418,12 @@
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_add",
-                    "json_path": "add.component_groups.*"
+                    "json_path": "add/component_groups/*"
                 },
                 {
                     "class": "ComponentGroup",
                     "name": "groups_to_remove",
-                    "json_path": "remove.component_groups.*"
+                    "json_path": "remove/component_groups/*"
                 }
             ]
         },
@@ -417,7 +433,7 @@
                 {
                     "class": "Cube",
                     "name": "cubes",
-                    "json_path": "cubes.*"
+                    "json_path": "cubes/*"
                 }
             ]
         },
