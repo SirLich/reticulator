@@ -348,6 +348,9 @@ class JsonResource(Resource):
         dpath.util.delete(self.data, json_path)
         return data
 
+    # TODO We need ability to set this value at a key that doesn't
+    # exist
+    
     # Sets value at jsonpath location
     def set_value_at(self, json_path, insert_value: any):
         dpath.util.set(self.data, json_path, insert_value)
