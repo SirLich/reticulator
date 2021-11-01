@@ -36,7 +36,7 @@ def make_creator(child):
     return (
     f"""
     def {creator_name}(self, name: str, data: dict) -> {class_}:
-        self.set_value_at("{path}." + name, data)
+        self.set_jsonpath("{path}." + name, data)
         new_object = {class_}(self, "{path}." + name, data)
         self.__{name}.append(new_object)
         return new_object
@@ -165,7 +165,7 @@ def make_subrec_accessor(child):
     return f"""
     @cached_property
     def {name}(self) -> list[{class_}]:
-        for path, data in self.get_data_at("{path}"):
+        for path, data in self.get_jsonpath("{path}"):
             self.__{name}.append({class_}(parent = self, json_path = path, data = data))
         return self.__{name}
     """
@@ -177,11 +177,11 @@ def make_property_accessor(child):
     return f"""
     @property
     def {name}(self):
-        return self.get_value_at("{path}")
+        return self.get_jsonpath("{path}")
     
     @{name}.setter
     def {name}(self, {name}):
-        return self.set_value_at("{path}", {name})
+        return self.set_jsonpath("{path}", {name})
 """ 
 def make_property_accessors(children):
     out = ""

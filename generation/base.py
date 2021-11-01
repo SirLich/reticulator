@@ -7,6 +7,7 @@ from pathlib import Path
 import glob
 from functools import cached_property
 from io import TextIOWrapper
+from typing import Union
 from send2trash import send2trash
 import copy
 import dpath.util
@@ -136,6 +137,8 @@ class NotifyList(list):
         super().__setitem__(attr, value)
 
 # endregion
+
+NO_ARGUMENT = object()
 
 class Resource():
     """
@@ -331,34 +334,70 @@ class JsonResource(Resource):
 
         if isinstance(raw_data, list):
             return NotifyList(raw_data, owner=self)
-        
+
         return raw_data
 
     def __str__(self):
         return json.dumps(self.data, indent=2, ensure_ascii=False)
 
-    # TODO: Add some kind of trycatch for these methods
 
-    # Removes value at jsonpath location
-    def remove_value_at(self, json_path):
-        dpath.util.delete(self.data, json_path)
+    def delete_jsonpath(self, json_path:str, ensure_exists:bool = False) -> None:
+        """
+        Removes value at jsonpath location.
+        """
+        try:
+            dpath.util.delete(self.data, json_path)
+        except dpath.exceptions.PathNotFound as path_not_found:
+            if ensure_exists:
+                raise dpath.exceptions.PathNotFoundError(
+                    f"Path {json_path} does not exist."
+                ) from path_not_found
 
-    def pop_value_at(self, json_path):
-        data = dpath.util.get(self.data, json_path)
-        dpath.util.delete(self.data, json_path)
+
+    def pop_jsonpath(self, json_path, default=NO_ARGUMENT, ensure_exists=False) \
+        -> Union[dict, list, int, str, float]:
+        """
+        Removes value at jsonpath location, and returns it.
+        """
+
+        data = self.get_jsonpath(json_path, default=default)
+        self.delete_jsonpath(json_path, ensure_exists=ensure_exists)
         return data
 
-    # TODO We need ability to set this value at a key that doesn't
-    # exist
-    
-    # Sets value at jsonpath location
-    def set_value_at(self, json_path, insert_value: any):
-        dpath.util.set(self.data, json_path, insert_value)
+    def set_jsonpath(self, json_path:str, insert_value:any, must_exist:bool=False):
+        """
+        Sets value at jsonpath location.
 
-    # Gets value at jsonpath location
-    def get_value_at(self, json_path):
-        return dpath.util.get(self.data, json_path)
+        Can create a new key if it doesn't exist.
+        """
 
+        # If the path must exist, and is missing, we can
+        # raise an error by getting the path
+        if must_exist:
+            self.get_jsonpath(json_path)
+
+        # Otherwise, set the value
+        dpath.util.new(self.data, json_path, insert_value)
+
+    def get_jsonpath(self, json_path, default=NO_ARGUMENT):
+        """
+        Gets value at jsonpath location.
+
+        A default value may be provided, for missing keys.
+
+        raises:
+            AssetNotFoundError if the path does not exist.
+        """
+        try:
+            return dpath.util.get(self.data, json_path)
+        except Exception as exception:
+            if default is not NO_ARGUMENT:
+                return default
+            raise AssetNotFoundError(
+                f"Path {json_path} does not exist."
+            ) from exception
+
+    # TODO: Rewrite this to not suck
     # Gets a list of values found at this jsonpath location
     def get_data_at(self, json_path):
         try:
@@ -367,7 +406,30 @@ class JsonResource(Resource):
                 raise AmbiguousAssetError('Data get must end with *', json_path)
             json_path = json_path[:-2]
 
-            result = self.get_value_at(json_path)
+            result = self.get_jsonpath(json_path)
+
+            if isinstance(result, dict):
+                for key in result.keys():
+                    yield json_path + f"/{key}", result[key]
+            elif isinstance(result, list):
+                for i, element in enumerate(result):
+                    yield json_path + f"/[{i}]", element
+            else:
+                raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
+
+        except KeyError as key_error:
+            raise AssetNotFoundError(json_path, self.data) from key_error
+
+    # TODO: Rewrite this to not suck
+    # Gets a list of values found at this jsonpath location
+    def get_data_at(self, json_path):
+        try:
+            # Get Data at has a special syntax, to make it clear you are getting a list
+            if not json_path.endswith("*"):
+                raise AmbiguousAssetError('Data get must end with *', json_path)
+            json_path = json_path[:-2]
+
+            result = self.get_jsonpath(json_path)
 
             if isinstance(result, dict):
                 for key in result.keys():
