@@ -349,7 +349,7 @@ class JsonResource(Resource):
             dpath.util.delete(self.data, json_path)
         except dpath.exceptions.PathNotFound as path_not_found:
             if ensure_exists:
-                raise dpath.exceptions.PathNotFoundError(
+                raise dpath.exceptions.PathNotFound(
                     f"Path {json_path} does not exist."
                 ) from path_not_found
 
@@ -420,29 +420,6 @@ class JsonResource(Resource):
         except KeyError as key_error:
             raise AssetNotFoundError(json_path, self.data) from key_error
 
-    # TODO: Rewrite this to not suck
-    # Gets a list of values found at this jsonpath location
-    def get_data_at(self, json_path):
-        try:
-            # Get Data at has a special syntax, to make it clear you are getting a list
-            if not json_path.endswith("*"):
-                raise AmbiguousAssetError('Data get must end with *', json_path)
-            json_path = json_path[:-2]
-
-            result = self.get_jsonpath(json_path)
-
-            if isinstance(result, dict):
-                for key in result.keys():
-                    yield json_path + f"/{key}", result[key]
-            elif isinstance(result, list):
-                for i, element in enumerate(result):
-                    yield json_path + f"/[{i}]", element
-            else:
-                raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
-
-        except KeyError as key_error:
-            raise AssetNotFoundError(json_path, self.data) from key_error
-
 class JsonFileResource(FileResource, JsonResource):
     """
     A file, which contains json data. Most files in the addon system
@@ -484,7 +461,8 @@ class JsonSubResource(JsonResource):
         self.data = self.convert_to_notify(data)
         self._resources: JsonSubResource = []
         self.parent.register_resource(self)
-
+    
+    # TODO This feels wrong?
     def get_id_from_jsonpath(self, json_path):
         return json_path.split("/")[-1]
 
@@ -498,27 +476,54 @@ class JsonSubResource(JsonResource):
         return raw_data
 
     def __str__(self):
+        """
+        Returns string representation of this resource.
+
+        The json data will be representation for printing: With the id appended,
+        and with indentation.
+        """
         return f'"{self.id}": {json.dumps(self.data, indent=2, ensure_ascii=False)}'
 
     @property
     def dirty(self):
+        """
+        Returns True if this resource has been modified since it was last saved.
+        """
         return self._dirty
 
     @dirty.setter
     def dirty(self, dirty):
+        """
+        Set the dirty flag, which stores whether this resource has been 
+        modified since it was last saved.
+        """
         self._dirty = dirty
         self.parent.dirty = dirty
 
     def register_resource(self, resource: JsonSubResource) -> None:
+        """
+        Register a child resource within this resource.
+        """
         self._resources.append(resource)
 
-    def _save(self): 
-        self.set_value_at(self.json_path, self.parent.data)
+    def _save(self):
+        """
+        Saves the resource, into its parents json structure.
+
+        This works by replacing the data at the jsonpath location,
+        meaning that the parent will contain accurate representation of
+        the childrends data, saved into itself.
+        """
+        self.parent.set_jsonpath(self.json_path, self.data)
         self._dirty = False
 
     def _delete(self):
+        """
+        Deletes itself from parent, by removing the data at the jsonpath
+        location.
+        """
         self.parent.dirty = True
-        self.parent.remove_value_at(self.json_path)
+        self.parent.delete_jsonpath(self.json_path)
 
 @dataclass
 class Translation:
