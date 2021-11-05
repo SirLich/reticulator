@@ -2,14 +2,14 @@ from distutils.core import setup
 setup(
   name = 'reticulator',         # How you named your package folder (MyLib)
   packages = ['reticulator'],   # Chose the same as "name"
-  version = '0.0.1',      # Start with a small number and increase it with every change you make
+  version = 'v0.0.1-beta',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'Reticulator is a pack-access library for Minecraft Bedrock Addons.',   # Give a short description about your library
   author = 'SirLich',                   # Type in your name
   author_email = 'sirlich.business@gmail.com',      # Type in your E-Mail
   url = 'https://github.com/SirLich/reticulator',   # Provide either the link to your github or to your website
-  download_url = 'https://github.com/user/reponame/archive/v_01.tar.gz',    # I explain this later on
-  keywords = ['MINECRAFT', 'MEANINGFULL', 'KEYWORDS'],   # Keywords that define your package best
+  download_url = 'https://github.com/SirLich/reticulator/archive/refs/tags/v0.0.1-beta.tar.gz',    # I explain this later on
+  keywords = ['MINECRAFT', 'BEDROCK-EDITION', 'BEDROCK-ADDONS'],   # Keywords that define your package best
   install_requires=[            # I get to this in a second
           'validators',
           'beautifulsoup4',
