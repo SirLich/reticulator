@@ -1,4 +1,7 @@
-"""Generator class for building Reticulator, based on some input structures."""
+"""
+Generator script for Reticulator, that takes in a models file, and generates
+a class for each model.
+"""
 import json
 
 def title_case(text):
@@ -9,18 +12,8 @@ def make_parameters(children):
     for child in children:
         name = child["name"]
         out += f"self.{name} = {name}\n        "
-    
+
     return out
-
-def convert_json_path_to_list(path: str):
-    path = path.replace("'", "")
-    elements = path.split('.')
-    out = ""
-    for element in elements:
-        if element != "$" and element != "" and element != "*":
-            out += f"['{element}']"
-    return out + "[name]"
-
 
 def make_creator(child):
     """Generate code-block for creating sub-resources"""
@@ -36,7 +29,7 @@ def make_creator(child):
     return (
     f"""
     def {creator_name}(self, name: str, data: dict) -> {class_}:
-        self.set_jsonpath("{path}." + name, data)
+        self.set_jsonpath("{path}" + name, data)
         new_object = {class_}(self, "{path}." + name, data)
         self.__{name}.append(new_object)
         return new_object
@@ -291,6 +284,6 @@ def generate(base, models, generated):
             outfile.write(make_sub_resource(model))
 
 def main():
-    generate("base.py", "models.json", "../reticulator.py")
+    generate("base.py", "models.json", "../reticulator/reticulator.py")
 
 main()
