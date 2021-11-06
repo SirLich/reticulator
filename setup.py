@@ -6,7 +6,7 @@ import os
 long_description = open(
     os.path.join(
         os.path.dirname(__file__),
-        'readme.md'
+        'readme.rst'
     )
 ).read()
 
