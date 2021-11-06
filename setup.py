@@ -13,7 +13,7 @@ long_description = open(
 setup(
   name = 'reticulator',
   packages = ['reticulator'],
-  version = 'v0.0.1-beta',
+  version = 'v0.0.2-beta',
   license='MIT',
   description = 'Reticulator is a pack-access library for Minecraft Bedrock Addons.',
   author = 'SirLich',
