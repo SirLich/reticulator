@@ -1,24 +1,35 @@
 from distutils.core import setup
+
+import os
+
+
+long_description = open(
+    os.path.join(
+        os.path.dirname(__file__),
+        'readme.md'
+    )
+).read()
+
 setup(
-  name = 'reticulator',         # How you named your package folder (MyLib)
-  packages = ['reticulator'],   # Chose the same as "name"
-  version = 'v0.0.1-beta',      # Start with a small number and increase it with every change you make
-  license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
-  description = 'Reticulator is a pack-access library for Minecraft Bedrock Addons.',   # Give a short description about your library
-  author = 'SirLich',                   # Type in your name
-  author_email = 'sirlich.business@gmail.com',      # Type in your E-Mail
-  url = 'https://github.com/SirLich/reticulator',   # Provide either the link to your github or to your website
-  download_url = 'https://github.com/SirLich/reticulator/archive/refs/tags/v0.0.1-beta.tar.gz',    # I explain this later on
-  keywords = ['MINECRAFT', 'BEDROCK-EDITION', 'BEDROCK-ADDONS'],   # Keywords that define your package best
-  install_requires=[            # I get to this in a second
-          'validators',
-          'beautifulsoup4',
-      ],
+  name = 'reticulator',
+  packages = ['reticulator'],
+  version = 'v0.0.1-beta',
+  license='MIT',
+  description = 'Reticulator is a pack-access library for Minecraft Bedrock Addons.',
+  author = 'SirLich',
+  long_description=long_description,
+  author_email = 'sirlich.business@gmail.com',
+  url = 'https://github.com/SirLich/reticulator',
+  keywords = ['MINECRAFT', 'BEDROCK-EDITION', 'BEDROCK-ADDONS'],
+  install_requires=[
+    'Send2Trash',
+    'dpath',
+  ],
   classifiers=[
     'Development Status :: 3 - Alpha',      # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package
     'Intended Audience :: Developers',      # Define that your audience are developers
     'Topic :: Software Development :: Libraries',
     'License :: OSI Approved :: MIT License',   # Again, pick a license
-    'Programming Language :: Python :: 3',      #Specify which pyhton versions that you want to support
+    'Programming Language :: Python :: 3',
   ],
 )
