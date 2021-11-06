@@ -158,7 +158,7 @@ def make_subrec_accessor(child):
     return f"""
     @cached_property
     def {name}(self) -> list[{class_}]:
-        for path, data in self.get_jsonpath("{path}"):
+        for path, data in self.get_data_at("{path}"):
             self.__{name}.append({class_}(parent = self, json_path = path, data = data))
         return self.__{name}
     """

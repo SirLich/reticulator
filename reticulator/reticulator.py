@@ -1118,7 +1118,7 @@ class RenderControllerFileRP(JsonFileResource):
     
     @cached_property
     def render_controllers(self) -> list[RenderControllerRP]:
-        for path, data in self.get_jsonpath("render_controllers/*"):
+        for path, data in self.get_data_at("render_controllers/*"):
             self.__render_controllers.append(RenderControllerRP(parent = self, json_path = path, data = data))
         return self.__render_controllers
     
@@ -1140,7 +1140,7 @@ class AnimationControllerFileRP(JsonFileResource):
     
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
-        for path, data in self.get_jsonpath("animation_controllers/*"):
+        for path, data in self.get_data_at("animation_controllers/*"):
             self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
         return self.__animation_controllers
     
@@ -1187,7 +1187,7 @@ class LootTableFile(JsonFileResource):
     
     @cached_property
     def pools(self) -> list[LootTablePool]:
-        for path, data in self.get_jsonpath("pools/*"):
+        for path, data in self.get_data_at("pools/*"):
             self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
     
@@ -1219,7 +1219,7 @@ class ItemFileRP(JsonFileResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_jsonpath("minecraft:item/components/*"):
+        for path, data in self.get_data_at("minecraft:item/components/*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1243,7 +1243,7 @@ class ItemFileBP(JsonFileResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_jsonpath("minecraft:item/components"):
+        for path, data in self.get_data_at("minecraft:item/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1267,7 +1267,7 @@ class BlockFileBP(JsonFileResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_jsonpath("minecraft:block/components"):
+        for path, data in self.get_data_at("minecraft:block/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1291,7 +1291,7 @@ class EntityFileRP(JsonFileResource):
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        for path, data in self.get_jsonpath("minecraft:client_entity/description/animations/*"):
+        for path, data in self.get_data_at("minecraft:client_entity/description/animations/*"):
             self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
     
@@ -1315,7 +1315,7 @@ class AnimationFileRP(JsonFileResource):
     
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        for path, data in self.get_jsonpath("animations/*"):
+        for path, data in self.get_data_at("animations/*"):
             self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
     
@@ -1349,19 +1349,19 @@ class EntityFileBP(JsonFileResource):
     
     @cached_property
     def component_groups(self) -> list[ComponentGroup]:
-        for path, data in self.get_jsonpath("minecraft:entity/component_groups/*"):
+        for path, data in self.get_data_at("minecraft:entity/component_groups/*"):
             self.__component_groups.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__component_groups
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_jsonpath("minecraft:entity/components/*"):
+        for path, data in self.get_data_at("minecraft:entity/components/*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     @cached_property
     def events(self) -> list[Event]:
-        for path, data in self.get_jsonpath("minecraft:entity/events/*"):
+        for path, data in self.get_data_at("minecraft:entity/events/*"):
             self.__events.append(Event(parent = self, json_path = path, data = data))
         return self.__events
     
@@ -1380,13 +1380,13 @@ class EntityFileBP(JsonFileResource):
 
     
     def create_component_group(self, name: str, data: dict) -> ComponentGroup:
-        self.set_jsonpath("minecraft:entity/component_groups/." + name, data)
+        self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
         new_object = ComponentGroup(self, "minecraft:entity/component_groups/." + name, data)
         self.__component_groups.append(new_object)
         return new_object
 
     def create_component(self, name: str, data: dict) -> Component:
-        self.set_jsonpath("minecraft:entity/components/." + name, data)
+        self.set_jsonpath("minecraft:entity/components/" + name, data)
         new_object = Component(self, "minecraft:entity/components/." + name, data)
         self.__components.append(new_object)
         return new_object
@@ -1401,7 +1401,7 @@ class ModelFileRP(JsonFileResource):
     
     @cached_property
     def models(self) -> list[Model]:
-        for path, data in self.get_jsonpath("minecraft:geometry/*"):
+        for path, data in self.get_data_at("minecraft:geometry/*"):
             self.__models.append(Model(parent = self, json_path = path, data = data))
         return self.__models
     
@@ -1417,7 +1417,7 @@ class AnimationControllerFile(JsonFileResource):
     
     @cached_property
     def animation_controllers(self) -> list[AnimationController]:
-        for path, data in self.get_jsonpath("animation_controllers/*"):
+        for path, data in self.get_data_at("animation_controllers/*"):
             self.__animation_controllers.append(AnimationController(parent = self, json_path = path, data = data))
         return self.__animation_controllers
     
@@ -1473,7 +1473,7 @@ class Model(JsonSubResource):
     
     @cached_property
     def bones(self) -> list[Bone]:
-        for path, data in self.get_jsonpath("bones/*"):
+        for path, data in self.get_data_at("bones/*"):
             self.__bones.append(Bone(parent = self, json_path = path, data = data))
         return self.__bones
     
@@ -1508,7 +1508,7 @@ class AnimationController(JsonSubResource):
     
     @cached_property
     def states(self) -> list[AnimationControllerState]:
-        for path, data in self.get_jsonpath("states/*"):
+        for path, data in self.get_data_at("states/*"):
             self.__states.append(AnimationControllerState(parent = self, json_path = path, data = data))
         return self.__states
     
@@ -1525,7 +1525,7 @@ class ComponentGroup(JsonSubResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_jsonpath("*"):
+        for path, data in self.get_data_at("*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
@@ -1533,7 +1533,7 @@ class ComponentGroup(JsonSubResource):
     
     
     def create_component(self, name: str, data: dict) -> Component:
-        self.set_jsonpath("." + name, data)
+        self.set_jsonpath("" + name, data)
         new_object = Component(self, "." + name, data)
         self.__components.append(new_object)
         return new_object
@@ -1559,13 +1559,13 @@ class Event(JsonSubResource):
     
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
-        for path, data in self.get_jsonpath("add/component_groups/*"):
+        for path, data in self.get_data_at("add/component_groups/*"):
             self.__groups_to_add.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_add
     
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
-        for path, data in self.get_jsonpath("remove/component_groups/*"):
+        for path, data in self.get_data_at("remove/component_groups/*"):
             self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_remove
     
@@ -1582,7 +1582,7 @@ class Bone(JsonSubResource):
     
     @cached_property
     def cubes(self) -> list[Cube]:
-        for path, data in self.get_jsonpath("cubes/*"):
+        for path, data in self.get_data_at("cubes/*"):
             self.__cubes.append(Cube(parent = self, json_path = path, data = data))
         return self.__cubes
     
