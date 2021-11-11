@@ -39,6 +39,15 @@ class TestJsonPathAccess(unittest.TestCase):
         # Test jsonpath which does not exist
         self.assertEqual(egg.component_groups, [])
 
+        # Test jsonpath default
+        self.assertEqual(dolphin.get_jsonpath('dne', default='default'), 'default')
+
+        # Test jsonpath which does not exist
+        with self.assertRaises(AssetNotFoundError):
+            dolphin.get_jsonpath('dne')
+
+    
+
 
 
 if __name__ == '__main__':

@@ -406,7 +406,7 @@ class JsonResource(Resource):
                 raise AmbiguousAssetError('Data get must end with *', json_path)
             json_path = json_path[:-2]
 
-            result = self.get_jsonpath(json_path)
+            result = self.get_jsonpath(json_path, default=[])
 
             if isinstance(result, dict):
                 for key in result.keys():
