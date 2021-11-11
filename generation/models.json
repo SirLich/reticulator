@@ -34,6 +34,15 @@
             ],
             "json_resources": [
                 {
+                    "class": "ParticleFileRP",
+                    "name": "particles",
+                    "file_path": "particles",
+                    "getter": {
+                        "name": "get_particle",
+                        "property": "identifier"
+                    }
+                },
+                {
                     "class": "AttachableFileRP",
                     "name": "attachables",
                     "file_path": "attachables",
@@ -166,6 +175,39 @@
         }
     ],
     "json_resources": [
+        {
+            "class": "ParticleFileRP",
+            "properties": [
+                {
+                    "name": "format_version",
+                    "json_path": "format_version"
+                },
+                {
+                    "name": "identifier",
+                    "json_path": "particle_effect/description/identifier"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "json_path": "particle_effect/components/*",
+                    "class": "GenericSubResource",
+                    "getter": {
+                        "name": "get_component",
+                        "property": "id"
+                    },
+                    "name": "components"
+                },
+                {
+                    "json_path": "particle_effect/events/*",
+                    "class": "GenericSubResource",
+                    "getter": {
+                        "name": "get_event",
+                        "property": "id"
+                    },
+                    "name": "events"
+                }
+            ]
+        },
         {
             "class": "AttachableFileRP",
             "properties": [
@@ -487,6 +529,9 @@
                     "json_path": "cubes/*"
                 }
             ]
+        },
+        {
+            "class": "GenericSubResource"
         },
         {
             "class": "Cube"

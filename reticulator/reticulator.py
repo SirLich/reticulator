@@ -765,6 +765,7 @@ class ResourcePack(Pack): pass
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
+        self.__particles = []
         self.__attachables = []
         self.__animation_controller_files = []
         self.__animation_files = []
@@ -774,6 +775,15 @@ class ResourcePack(Pack):
         self.__items = []
         
     
+    @cached_property
+    def particles(self) -> list[ParticleFileRP]:
+        base_directory = os.path.join(self.input_path, "particles")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__particles.append(ParticleFileRP(file_path = local_path, pack = self))
+            
+        return self.__particles
+
     @cached_property
     def attachables(self) -> list[AttachableFileRP]:
         base_directory = os.path.join(self.input_path, "attachables")
@@ -863,6 +873,12 @@ class ResourcePack(Pack):
         return children
 
     
+    def get_particle(self, identifier:str) -> ParticleFileRP:
+        for child in self.particles:
+            if child.identifier == identifier:
+                return child
+        raise AssetNotFoundError(identifier)
+
     def get_attachable(self, identifier:str) -> AttachableFileRP:
         for child in self.attachables:
             if child.identifier == identifier:
@@ -1048,6 +1064,57 @@ class BehaviorPack(Pack):
             if child.identifier == identifier:
                 return child
         raise AssetNotFoundError(identifier)
+
+    
+    
+class ParticleFileRP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        self.__components = []
+        self.__events = []
+        
+    
+    @property
+    def format_version(self):
+        return self.get_jsonpath("format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", format_version)
+
+    @property
+    def identifier(self):
+        return self.get_jsonpath("particle_effect/description/identifier")
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        return self.set_jsonpath("particle_effect/description/identifier", identifier)
+
+    
+    @cached_property
+    def components(self) -> list[GenericSubResource]:
+        for path, data in self.get_data_at("particle_effect/components/*"):
+            self.__components.append(GenericSubResource(parent = self, json_path = path, data = data))
+        return self.__components
+    
+    @cached_property
+    def events(self) -> list[GenericSubResource]:
+        for path, data in self.get_data_at("particle_effect/events/*"):
+            self.__events.append(GenericSubResource(parent = self, json_path = path, data = data))
+        return self.__events
+    
+    
+    def get_component(self, id:str) -> GenericSubResource:
+        for child in self.components:
+            if child.id == id:
+                return child
+        raise AssetNotFoundError(id)
+
+    def get_event(self, id:str) -> GenericSubResource:
+        for child in self.events:
+            if child.id == id:
+                return child
+        raise AssetNotFoundError(id)
 
     
     
@@ -1585,6 +1652,16 @@ class Bone(JsonSubResource):
         for path, data in self.get_data_at("cubes/*"):
             self.__cubes.append(Cube(parent = self, json_path = path, data = data))
         return self.__cubes
+    
+    
+    
+    
+    
+class GenericSubResource(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+        
+        
     
     
     
