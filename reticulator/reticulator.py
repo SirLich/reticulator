@@ -909,6 +909,12 @@ class ResourcePack(Pack):
                 return child
         raise AssetNotFoundError(file_name)
 
+    def get_render_controller_file(self, file_name:str) -> RenderControllerFileRP:
+        for child in self.render_controller_files:
+            if child.file_name == file_name:
+                return child
+        raise AssetNotFoundError(file_name)
+
     
     def get_render_controller(self, id:str) -> RenderControllerRP:
         for file_child in self.render_controller_files:
@@ -1067,6 +1073,23 @@ class BehaviorPack(Pack):
 
     
     
+class RecipeFile(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        
+    
+    @property
+    def identifier(self):
+        return self.get_jsonpath("**/identifier")
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        return self.set_jsonpath("**/identifier", identifier)
+
+    
+    
+    
+    
 class ParticleFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -1092,25 +1115,25 @@ class ParticleFileRP(JsonFileResource):
 
     
     @cached_property
-    def components(self) -> list[GenericSubResource]:
+    def components(self) -> list[JsonSubResource]:
         for path, data in self.get_data_at("particle_effect/components/*"):
-            self.__components.append(GenericSubResource(parent = self, json_path = path, data = data))
+            self.__components.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__components
     
     @cached_property
-    def events(self) -> list[GenericSubResource]:
+    def events(self) -> list[JsonSubResource]:
         for path, data in self.get_data_at("particle_effect/events/*"):
-            self.__events.append(GenericSubResource(parent = self, json_path = path, data = data))
+            self.__events.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__events
     
     
-    def get_component(self, id:str) -> GenericSubResource:
+    def get_component(self, id:str) -> JsonSubResource:
         for child in self.components:
             if child.id == id:
                 return child
         raise AssetNotFoundError(id)
 
-    def get_event(self, id:str) -> GenericSubResource:
+    def get_event(self, id:str) -> JsonSubResource:
         for child in self.events:
             if child.id == id:
                 return child
@@ -1204,6 +1227,14 @@ class AnimationControllerFileRP(JsonFileResource):
         self.__animation_controllers = []
         
     
+    @property
+    def format_version(self):
+        return self.get_jsonpath("format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", format_version)
+
     
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
@@ -1475,22 +1506,6 @@ class ModelFileRP(JsonFileResource):
     
     
     
-class AnimationControllerFile(JsonFileResource):
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__animation_controllers = []
-        
-    
-    
-    @cached_property
-    def animation_controllers(self) -> list[AnimationController]:
-        for path, data in self.get_data_at("animation_controllers/*"):
-            self.__animation_controllers.append(AnimationController(parent = self, json_path = path, data = data))
-        return self.__animation_controllers
-    
-    
-    
-    
 class RenderControllerRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
@@ -1501,7 +1516,7 @@ class RenderControllerRP(JsonSubResource):
     
     
     
-class AnimationControllerRP(JsonSubResource):
+class Cube(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
         
@@ -1521,7 +1536,7 @@ class LootTablePool(JsonSubResource):
     
     
     
-class AnimationControllerState(JsonSubResource):
+class AnimationControllerStateRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
         
@@ -1529,6 +1544,37 @@ class AnimationControllerState(JsonSubResource):
     
     
     
+    
+    
+class AnimationControllerRP(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+        
+        self.__states = []
+        
+    
+    @cached_property
+    def states(self) -> list[AnimationControllerStateRP]:
+        for path, data in self.get_data_at("states/*"):
+            self.__states.append(AnimationControllerStateRP(parent = self, json_path = path, data = data))
+        return self.__states
+    
+    
+    @property
+    def initial_state(self):
+        return self.get_jsonpath("initial_state")
+    
+    @initial_state.setter
+    def initial_state(self, initial_state):
+        return self.set_jsonpath("initial_state", initial_state)
+
+    
+    def get_state(self, id:str) -> AnimationControllerStateRP:
+        for child in self.states:
+            if child.id == id:
+                return child
+        raise AssetNotFoundError(id)
+
     
     
 class Model(JsonSubResource):
@@ -1560,26 +1606,24 @@ class AnimationRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
         
-        
-    
-    
-    
-    
-    
-class AnimationController(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        self.__states = []
+        self.__bones = []
         
     
     @cached_property
-    def states(self) -> list[AnimationControllerState]:
-        for path, data in self.get_data_at("states/*"):
-            self.__states.append(AnimationControllerState(parent = self, json_path = path, data = data))
-        return self.__states
+    def bones(self) -> list[JsonSubResource]:
+        for path, data in self.get_data_at("bones"):
+            self.__bones.append(JsonSubResource(parent = self, json_path = path, data = data))
+        return self.__bones
     
     
+    @property
+    def loop(self):
+        return self.get_jsonpath("loop")
+    
+    @loop.setter
+    def loop(self, loop):
+        return self.set_jsonpath("loop", loop)
+
     
     
     
@@ -1652,26 +1696,6 @@ class Bone(JsonSubResource):
         for path, data in self.get_data_at("cubes/*"):
             self.__cubes.append(Cube(parent = self, json_path = path, data = data))
         return self.__cubes
-    
-    
-    
-    
-    
-class GenericSubResource(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
-    
-    
-    
-    
-    
-class Cube(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
     
     
     

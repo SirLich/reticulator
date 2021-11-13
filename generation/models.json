@@ -90,7 +90,11 @@
                 {
                     "class": "RenderControllerFileRP",
                     "name": "render_controller_files",
-                    "file_path": "render_controllers"
+                    "file_path": "render_controllers",
+                    "getter": {
+                        "name": "get_render_controller_file",
+                        "property": "file_name"
+                    }
                 },
                 {
                     "class": "ItemFileRP",
@@ -176,6 +180,15 @@
     ],
     "json_resources": [
         {
+            "class": "RecipeFile",
+            "properties": [
+                {
+                    "name": "identifier",
+                    "json_path": "**/identifier"
+                }
+            ]
+        },
+        {
             "class": "ParticleFileRP",
             "properties": [
                 {
@@ -190,7 +203,7 @@
             "sub_resources": [
                 {
                     "json_path": "particle_effect/components/*",
-                    "class": "GenericSubResource",
+                    "class": "JsonSubResource",
                     "getter": {
                         "name": "get_component",
                         "property": "id"
@@ -199,7 +212,7 @@
                 },
                 {
                     "json_path": "particle_effect/events/*",
-                    "class": "GenericSubResource",
+                    "class": "JsonSubResource",
                     "getter": {
                         "name": "get_event",
                         "property": "id"
@@ -256,6 +269,12 @@
         },
         {
             "class": "AnimationControllerFileRP",
+            "properties": [
+                {
+                    "name": "format_version",
+                    "json_path": "format_version"
+                }
+            ],
             "sub_resources": [
                 {
                     "class": "AnimationControllerRP",
@@ -428,16 +447,6 @@
                     "json_path": "minecraft:geometry/*"
                 }
             ]
-        },
-        {
-            "class": "AnimationControllerFile",
-            "sub_resources": [
-                {
-                    "class": "AnimationController",
-                    "name": "animation_controllers",
-                    "json_path": "animation_controllers/*"
-                }
-            ]
         }
     ],
     "sub_resources": [
@@ -445,13 +454,33 @@
             "class": "RenderControllerRP"
         },
         {
-            "class": "AnimationControllerRP"
+            "class": "Cube"
         },
         {
             "class": "LootTablePool"
         },
         {
-            "class": "AnimationControllerState"
+            "class": "AnimationControllerStateRP"
+        },
+        {
+            "class": "AnimationControllerRP",
+            "properties": [
+                {
+                    "name": "initial_state",
+                    "json_path": "initial_state"
+                }
+            ],
+            "sub_resources": [
+                {
+                    "class": "AnimationControllerStateRP",
+                    "json_path": "states/*",
+                    "name": "states",
+                    "getter": {
+                        "name": "get_state",
+                        "property": "id"
+                    }
+                }
+            ]
         },
         {
             "class": "Model",
@@ -470,15 +499,18 @@
             ]
         },
         {
-            "class": "AnimationRP"
-        },
-        {
-            "class": "AnimationController",
+            "class": "AnimationRP",
+            "properties": [
+                {
+                    "name": "loop",
+                    "json_path": "loop"
+                }
+            ],
             "sub_resources": [
                 {
-                    "class": "AnimationControllerState",
-                    "json_path": "states/*",
-                    "name": "states"
+                    "class": "JsonSubResource",
+                    "name": "bones",
+                    "json_path": "bones"
                 }
             ]
         },
@@ -529,12 +561,6 @@
                     "json_path": "cubes/*"
                 }
             ]
-        },
-        {
-            "class": "GenericSubResource"
-        },
-        {
-            "class": "Cube"
         }
     ]
 }
