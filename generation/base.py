@@ -535,6 +535,30 @@ class Translation:
     value: str
     comment: str
 
+class FunctionFile(FileResource):
+    """
+    A FunctionFile is a function file, such as run.mcfunction, and is
+    made up of many commands.
+    """
+    def __init__(self, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(file_path=file_path, pack=pack)
+        self.__commands : list[str] = []
+    
+    @cached_property
+    def commands(self) -> list[str]:
+        with open(os.path.join(self.pack.input_path, self.file_path), "r", encoding='utf-8') as function_file:
+            for line in function_file.readlines():
+                if not line.startswith("#"):
+                    self.__commands.append(line)
+        return self.__commands
+
+    def _save(self):
+        path = os.path.join(self.pack.output_path, self.file_path)
+        create_nested_directory(path)
+        with open(path, 'w', encoding='utf-8') as file:
+            for command in self.commands:
+                file.write(command)
+
 class LanguageFile(FileResource):
     """
     A LanguageFile is a language file, such as 'en_US.lang', and is made
@@ -660,6 +684,12 @@ class Pack():
         Register a child resource to this pack. These resources will be saved
         during save.
         """
+
+        # Attempt to set the pack for this resource.
+        try:
+            resource.pack = self
+        except Exception:
+            pass
         self.resources.append(resource)
 
     def get_language_file(self, file_name:str) -> LanguageFile:
@@ -734,7 +764,7 @@ class Project():
         self.__behavior_path = behavior_path
         self.__resource_path = resource_path
         self.__resource_pack = None
-        self.__behavior_pack = None
+        self.__behavior_pack : BehaviorPack = None
 
     @cached_property
     def resource_pack(self) -> ResourcePack:

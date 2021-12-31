@@ -137,12 +137,13 @@ def make_resource_accessor(child):
     name = child["name"]
     class_ = child["class"]
     path = child["file_path"]
+    file_extension = child.get("file_extension", "json")
 
     return f"""
     @cached_property
     def {name}(self) -> list[{class_}]:
         base_directory = os.path.join(self.input_path, "{path}")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+        for local_path in glob.glob(base_directory + "/**/*.{file_extension}", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
             self.__{name}.append({class_}(file_path = local_path, pack = self))
             

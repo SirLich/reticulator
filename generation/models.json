@@ -107,6 +107,16 @@
             "class": "BehaviorPack",
             "json_resources": [
                 {
+                    "class": "FunctionFile",
+                    "name": "functions",
+                    "file_path": "functions",
+                    "file_extension": "mcfunction",
+                    "getter": {
+                        "name": "get_function",
+                        "property": "file_path"
+                    }
+                },
+                {
                     "class": "FeaturesFileBP",
                     "name": "features_file",
                     "file_path": "features"
