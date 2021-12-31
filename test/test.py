@@ -14,6 +14,25 @@ def create_output_directory():
 def clean_up_output_directory():
     os.remove('test_output')
 
+class TestFunctions(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_count(self):
+        self.assertEqual(len(self.bp.functions), 2)
+
+    def test_comment_stripping(self):
+        """
+        The first function has 1 command, the second has 2
+        """
+        self.assertEqual(len(self.bp.functions[0].commands), 2)
+        self.assertEqual(len(self.bp.functions[1].commands), 1)
+    
+    def test_getting_function(self):
+        self.assertTrue(self.bp.get_function('functions\\kill_all_safe.mcfunction'))
+        self.assertTrue(self.bp.get_function('functions\\teleport\\home.mcfunction'))
+
+    
 class TestRecipes(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()

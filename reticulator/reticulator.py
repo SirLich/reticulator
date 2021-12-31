@@ -548,7 +548,7 @@ class FunctionFile(FileResource):
     def commands(self) -> list[str]:
         with open(os.path.join(self.pack.input_path, self.file_path), "r", encoding='utf-8') as function_file:
             for line in function_file.readlines():
-                if not line.startswith("#"):
+                if line.strip() and not line.startswith("#"):
                     self.__commands.append(line)
         return self.__commands
 
