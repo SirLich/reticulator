@@ -158,7 +158,7 @@
                     }
                 },
                 {
-                    "class": "AnimationControllerFile",
+                    "class": "AnimationControllerFileRP",
                     "name": "animation_controller_files",
                     "file_path": "animation_controllers"
                 },
