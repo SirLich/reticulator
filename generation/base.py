@@ -341,18 +341,26 @@ class JsonResource(Resource):
         return json.dumps(self.data, indent=2, ensure_ascii=False)
 
 
+    def jsonpath_exists(self, json_path:str) -> bool:
+        """
+        Checks if a jsonpath exists
+        """
+        try:
+            self.get_jsonpath(json_path)
+            return True
+        except AssetNotFoundError:
+            return False
+
     def delete_jsonpath(self, json_path:str, ensure_exists:bool = False) -> None:
         """
         Removes value at jsonpath location.
         """
-        try:
+        path_exists = self.jsonpath_exists
+        if path_exists:
             dpath.util.delete(self.data, json_path)
-        except dpath.exceptions.PathNotFound as path_not_found:
+        else:
             if ensure_exists:
-                raise dpath.exceptions.PathNotFound(
-                    f"Path {json_path} does not exist."
-                ) from path_not_found
-
+                raise AssetNotFoundError(f"Path {json_path} does not exist.")
 
     def pop_jsonpath(self, json_path, default=NO_ARGUMENT, ensure_exists=False) \
         -> Union[dict, list, int, str, float]:
@@ -364,17 +372,24 @@ class JsonResource(Resource):
         self.delete_jsonpath(json_path, ensure_exists=ensure_exists)
         return data
 
-    def set_jsonpath(self, json_path:str, insert_value:any, must_exist:bool=False):
+    def set_jsonpath(self, json_path:str, insert_value:any, must_exist:bool=False, overwrite:bool=True):
         """
         Sets value at jsonpath location.
 
         Can create a new key if it doesn't exist.
         """
 
+        path_exists = self.jsonpath_exists(json_path)
+
         # If the path must exist, and is missing, we can
         # raise an error by getting the path
-        if must_exist:
+        if not path_exists and must_exist:
             self.get_jsonpath(json_path)
+
+        # If overwrite is false, it will set the path only
+        # if there is no path.
+        if path_exists and not overwrite:
+            return
 
         # Otherwise, set the value
         dpath.util.new(self.data, json_path, insert_value)
