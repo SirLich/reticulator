@@ -358,9 +358,8 @@ class JsonResource(Resource):
         path_exists = self.jsonpath_exists
         if path_exists:
             dpath.util.delete(self.data, json_path)
-        else:
-            if ensure_exists:
-                raise AssetNotFoundError(f"Path {json_path} does not exist.")
+        elif ensure_exists:
+            raise AssetNotFoundError(f"Path {json_path} does not exist. Cannot delete.")
 
     def pop_jsonpath(self, json_path, default=NO_ARGUMENT, ensure_exists=False) \
         -> Union[dict, list, int, str, float]:
@@ -384,7 +383,7 @@ class JsonResource(Resource):
         # If the path must exist, and is missing, we can
         # raise an error by getting the path
         if not path_exists and must_exist:
-            self.get_jsonpath(json_path)
+            raise AssetNotFoundError(f"Path {json_path} does not exist. Cannot set value.")
 
         # If overwrite is false, it will set the path only
         # if there is no path.
