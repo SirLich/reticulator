@@ -355,7 +355,7 @@ class JsonResource(Resource):
         """
         Removes value at jsonpath location.
         """
-        path_exists = self.jsonpath_exists
+        path_exists = self.jsonpath_exists(json_path)
         if path_exists:
             dpath.util.delete(self.data, json_path)
         elif ensure_exists:
