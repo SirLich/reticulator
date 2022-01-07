@@ -32,7 +32,6 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(self.bp.get_function('functions\\kill_all_safe.mcfunction'))
         self.assertTrue(self.bp.get_function('functions\\teleport\\home.mcfunction'))
 
-    
 class TestRecipes(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -51,7 +50,7 @@ class TestRecipes(unittest.TestCase):
         self.assertEqual(self.bp.get_recipe("minecraft:furnace_stained_hardened_clay3").identifier, "minecraft:furnace_stained_hardened_clay3")
 
         with self.assertRaises(AssetNotFoundError):
-            self.bp.get_recipe('no fount')
+            self.bp.get_recipe('no found')
 
 class TestDirty(unittest.TestCase):
     def setUp(self) -> None:
@@ -135,7 +134,83 @@ class TestJsonPathAccess(unittest.TestCase):
         self.project = Project('./content/bp/', './content/rp/')
         self.bp = self.project.behavior_pack
         self.rp = self.project.resource_pack
+    
+    def test_jsonpath_exists(self):
+        """
+        Test jsonpath_exists method.
+        """
+
+        entity = self.bp.get_entity('minecraft:dolphin')
+
+        # Test exists
+        self.assertTrue(entity.jsonpath_exists('minecraft:entity/description/identifier'))
+
+        # Test does not exist
+        self.assertFalse(entity.jsonpath_exists('dne'))
+
+    def test_delete_jsonpath(self):
+        """ 
+        Tests deleting paths from json data.
+        """
+        entity = self.bp.get_entity('minecraft:dolphin')
+
+        # Delete, with ensure_exists
+        with self.assertRaises(AssetNotFoundError):
+            entity.delete_jsonpath('dne', ensure_exists=True)
         
+        # Delete, without ensure_exists (should not error!)
+        entity.delete_jsonpath('dne')
+
+        # Delete string
+        entity.delete_jsonpath('minecraft:entity/description/identifier')
+        self.assertFalse(entity.jsonpath_exists('minecraft:entity/description/identifier'))
+
+        # Delete complex structure
+        entity.delete_jsonpath('minecraft:entity')
+        self.assertFalse(entity.jsonpath_exists('minecraft:entity'))
+
+    def test_set_jsonpath(self):
+        """
+        Test setting a value in a jsonpath.
+        """
+        entity = self.bp.get_entity('minecraft:dolphin')
+
+        # Test normal set_jsonpath
+        entity.set_jsonpath('new_key', 'new_value')
+        self.assertEqual(entity.get_jsonpath('new_key'), 'new_value')
+
+        # must_exist=True
+        with self.assertRaises(AssetNotFoundError):
+            entity.set_jsonpath('does_not_exist', 'new_value', must_exist=True)
+
+        # must_exist=False (implied)
+        entity.set_jsonpath('does_not_exist', 'new_value')
+
+        # Test overwrite=False
+        entity.set_jsonpath('minecraft:entity/description/identifier', 'minecraft:dog', overwrite=False)
+        self.assertNotEqual(entity.get_jsonpath('minecraft:entity/description/identifier'), 'minecraft:dog')
+
+        # Test overwrite=True
+        entity.set_jsonpath('minecraft:entity/description/identifier', 'minecraft:dog', overwrite=True)
+        self.assertEqual(entity.get_jsonpath('minecraft:entity/description/identifier'), 'minecraft:dog')
+
+    def test_pop_jsonpath(self):
+        """
+        Tests popping a jsonpath
+        """
+
+        entity = self.bp.get_entity('minecraft:dolphin')
+
+        # Test normal pop
+        self.assertEqual(entity.pop_jsonpath('minecraft:entity/description/identifier'), 'minecraft:dolphin')
+        
+        # Test non-existent pop
+        with self.assertRaises(AssetNotFoundError):
+            entity.pop_jsonpath('dne')
+
+        # Test default
+        self.assertEqual(entity.pop_jsonpath('dne', default='default_value'), 'default_value')
+
     def test_get_jsonpath(self):
         """
         Tests the result of a valid jsonpath.

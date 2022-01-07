@@ -117,7 +117,7 @@
                     }
                 },
                 {
-                    "class": "FeaturesFileBP",
+                    "class": "FeatureFileBP",
                     "name": "features_file",
                     "file_path": "features"
                 },
@@ -189,6 +189,9 @@
         }
     ],
     "json_resources": [
+        {
+            "class": "FeatureFileBP"
+        },
         {
             "class": "RecipeFile",
             "properties": [

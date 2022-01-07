@@ -355,7 +355,7 @@ class JsonResource(Resource):
         """
         Removes value at jsonpath location.
         """
-        path_exists = self.jsonpath_exists
+        path_exists = self.jsonpath_exists(json_path)
         if path_exists:
             dpath.util.delete(self.data, json_path)
         elif ensure_exists:
@@ -1007,11 +1007,11 @@ class BehaviorPack(Pack):
         return self.__functions
 
     @cached_property
-    def features_file(self) -> list[FeaturesFileBP]:
+    def features_file(self) -> list[FeatureFileBP]:
         base_directory = os.path.join(self.input_path, "features")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__features_file.append(FeaturesFileBP(file_path = local_path, pack = self))
+            self.__features_file.append(FeatureFileBP(file_path = local_path, pack = self))
             
         return self.__features_file
 
@@ -1131,6 +1131,15 @@ class BehaviorPack(Pack):
                 return child
         raise AssetNotFoundError(identifier)
 
+    
+    
+class FeatureFileBP(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        
+    
+    
+    
     
     
 class RecipeFile(JsonFileResource):

@@ -246,6 +246,7 @@ def make_params(model):
     
     return data
 
+
 def make_sub_resource(model):
     class_ = model.get("class")
     children = model.get("sub_resources", [])
