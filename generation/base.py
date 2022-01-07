@@ -12,8 +12,6 @@ from send2trash import send2trash
 import copy
 import dpath.util
 
-# region globals
-
 def create_nested_directory(path: str):
     """
     Creates a nested directory structure if it doesn't exist.
@@ -33,8 +31,19 @@ def freeze(o):
 
     return hash(o)
 
-#endregion
-# region exceptions
+def smart_compare(a, b):
+    """
+    Compares to objects using ==, but if they can both be interpreted as
+    path-like objects, it uses path comparison.
+    """
+    try:
+        a = Path(a)
+        b = Path(b)
+
+        return a == b
+    except Exception:
+        return a == b
+
 class ReticulatorException(Exception):
     """
     Base class for Reticulator exceptions.
@@ -56,11 +65,8 @@ class AmbiguousAssetError(ReticulatorException):
     """
     Called when a path is not unique
     """
-#endregion
-# region notify classes
 
 # TODO: Replace these with a hash-based edit-detection method?
-
 class NotifyDict(dict):
     """
     A notify dictionary is a dictionary that can notify its parent when its been

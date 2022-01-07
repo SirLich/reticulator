@@ -12,8 +12,6 @@ from send2trash import send2trash
 import copy
 import dpath.util
 
-# region globals
-
 def create_nested_directory(path: str):
     """
     Creates a nested directory structure if it doesn't exist.
@@ -33,8 +31,19 @@ def freeze(o):
 
     return hash(o)
 
-#endregion
-# region exceptions
+def smart_compare(a, b):
+    """
+    Compares to objects using ==, but if they can both be interpreted as
+    path-like objects, it uses path comparison.
+    """
+    try:
+        a = Path(a)
+        b = Path(b)
+
+        return a == b
+    except Exception:
+        return a == b
+
 class ReticulatorException(Exception):
     """
     Base class for Reticulator exceptions.
@@ -56,11 +65,8 @@ class AmbiguousAssetError(ReticulatorException):
     """
     Called when a path is not unique
     """
-#endregion
-# region notify classes
 
 # TODO: Replace these with a hash-based edit-detection method?
-
 class NotifyDict(dict):
     """
     A notify dictionary is a dictionary that can notify its parent when its been
@@ -919,43 +925,43 @@ class ResourcePack(Pack):
     
     def get_particle(self, identifier:str) -> ParticleFileRP:
         for child in self.particles:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_attachable(self, identifier:str) -> AttachableFileRP:
         for child in self.attachables:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_animation_controller_file(self, file_name:str) -> AnimationControllerFileRP:
         for child in self.animation_controller_files:
-            if child.file_name == file_name:
+            if smart_compare(child.file_name, file_name):
                 return child
         raise AssetNotFoundError(file_name)
 
     def get_animation_file(self, file_name:str) -> AnimationFileRP:
         for child in self.animation_files:
-            if child.file_name == file_name:
+            if smart_compare(child.file_name, file_name):
                 return child
         raise AssetNotFoundError(file_name)
 
     def get_entity(self, identifier:str) -> EntityFileRP:
         for child in self.entities:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_model_file(self, file_name:str) -> ModelFileRP:
         for child in self.model_files:
-            if child.file_name == file_name:
+            if smart_compare(child.file_name, file_name):
                 return child
         raise AssetNotFoundError(file_name)
 
     def get_render_controller_file(self, file_name:str) -> RenderControllerFileRP:
         for child in self.render_controller_files:
-            if child.file_name == file_name:
+            if smart_compare(child.file_name, file_name):
                 return child
         raise AssetNotFoundError(file_name)
 
@@ -963,21 +969,21 @@ class ResourcePack(Pack):
     def get_render_controller(self, id:str) -> RenderControllerRP:
         for file_child in self.render_controller_files:
             for child in file_child.render_controllers:
-                if child.id == id:
+                if smart_compare(child.id, id):
                     return child
         raise AssetNotFoundError(id)
 
     def get_animation_controller(self, id:str) -> AnimationControllerRP:
         for file_child in self.animation_controller_files:
             for child in file_child.animation_controllers:
-                if child.id == id:
+                if smart_compare(child.id, id):
                     return child
         raise AssetNotFoundError(id)
 
     def get_model(self, identifier:str) -> Model:
         for file_child in self.model_files:
             for child in file_child.models:
-                if child.identifier == identifier:
+                if smart_compare(child.identifier, identifier):
                     return child
         raise AssetNotFoundError(identifier)
 
@@ -1091,43 +1097,43 @@ class BehaviorPack(Pack):
     
     def get_function(self, file_path:str) -> FunctionFile:
         for child in self.functions:
-            if child.file_path == file_path:
+            if smart_compare(child.file_path, file_path):
                 return child
         raise AssetNotFoundError(file_path)
 
     def get_feature_rules_file(self, identifier:str) -> FeatureRulesFileBP:
         for child in self.feature_rules_files:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_spawn_rule(self, identifier:str) -> SpawnRuleFile:
         for child in self.spawn_rules:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_recipe(self, identifier:str) -> RecipeFile:
         for child in self.recipes:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_entity(self, identifier:str) -> EntityFileBP:
         for child in self.entities:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_item(self, identifier:str) -> ItemFileBP:
         for child in self.items:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_block(self, identifier:str) -> BlockFileBP:
         for child in self.blocks:
-            if child.identifier == identifier:
+            if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
@@ -1198,13 +1204,13 @@ class ParticleFileRP(JsonFileResource):
     
     def get_component(self, id:str) -> JsonSubResource:
         for child in self.components:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
     def get_event(self, id:str) -> JsonSubResource:
         for child in self.events:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
@@ -1284,7 +1290,7 @@ class RenderControllerFileRP(JsonFileResource):
     
     def get_render_controller(self, id:str) -> RenderControllerRP:
         for child in self.render_controllers:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
@@ -1314,7 +1320,7 @@ class AnimationControllerFileRP(JsonFileResource):
     
     def get_animation_controller(self, id:str) -> AnimationControllerRP:
         for child in self.animation_controllers:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
@@ -1535,13 +1541,13 @@ class EntityFileBP(JsonFileResource):
     
     def get_component_group(self, id:str) -> ComponentGroup:
         for child in self.component_groups:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
     def get_component(self, id:str) -> Component:
         for child in self.components:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
@@ -1640,7 +1646,7 @@ class AnimationControllerRP(JsonSubResource):
     
     def get_state(self, id:str) -> AnimationControllerStateRP:
         for child in self.states:
-            if child.id == id:
+            if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 

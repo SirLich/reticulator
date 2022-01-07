@@ -29,8 +29,13 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(len(self.bp.functions[1].commands), 1)
     
     def test_getting_function(self):
+        # Getting function by path can take multiple path formats
         self.assertTrue(self.bp.get_function('functions\\kill_all_safe.mcfunction'))
-        self.assertTrue(self.bp.get_function('functions\\teleport\\home.mcfunction'))
+        self.assertTrue(self.bp.get_function('functions/teleport/home.mcfunction'))
+
+    def test_non_existent_function(self):
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_function('functions/no_function.mcfunction')
 
 class TestRecipes(unittest.TestCase):
     def setUp(self) -> None:

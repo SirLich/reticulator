@@ -52,7 +52,7 @@ def make_grandchild_getter(child):
     def {getter_name}(self, {prop}:str) -> {class_}:
         for file_child in self.{from_child}:
             for child in file_child.{name}:
-                if child.{prop} == {prop}:
+                if smart_compare(child.{prop}, {prop}):
                     return child
         raise AssetNotFoundError({prop})
 """)
@@ -75,7 +75,7 @@ def make_getter(child):
     def {getter_name}(self, {prop}:str) -> {class_}:
         for file_child in self.{name}:
             for child in file_child:
-                if child.{prop} == {prop}:
+                if smart_compare(child.{prop}, {prop}):
                     return child
         raise AssetNotFoundError
 """)
@@ -85,7 +85,7 @@ def make_getter(child):
     f"""
     def {getter_name}(self, {prop}:str) -> {class_}:
         for child in self.{name}:
-            if child.{prop} == {prop}:
+            if smart_compare(child.{prop}, {prop}):
                 return child
         raise AssetNotFoundError({prop})
 """)
