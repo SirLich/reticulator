@@ -330,7 +330,7 @@ class JsonResource(Resource):
     """
     Parent class, which is responsible for all resources which contain
     json data.
-    Should not be used directly. Use should JsonFileResource, or JsonSubResource.
+    Should not be used directly. Use JsonFileResource, or JsonSubResource instead.
     Contains:
      - Data object
      - Method for interacting with the data
@@ -346,10 +346,8 @@ class JsonResource(Resource):
     def _delete(self):
         raise NotImplementedError("This json resource cannot be deleted.")
 
-
     def __str__(self):
         return json.dumps(self.data, indent=2, ensure_ascii=False)
-
 
     def jsonpath_exists(self, json_path:str) -> bool:
         """
@@ -567,6 +565,22 @@ class JsonSubResource(JsonResource):
         """
         self.parent.dirty = True
         self.parent.delete_jsonpath(self.json_path)
+
+class ShortnameResourcePair(Resource):
+    """
+    A str:Resource pair, which is used to store assets by their shortname.
+
+    Useful in cases such as EntityRP, where a shortname resource is paired
+    with an identifier, which can be converted into a resource
+    """
+    def __init__(self, shortname: str, resource: Resource, file: FileResource = None, pack: Pack = None) -> None:
+        super().__init__(file=FileResource, pack=pack)
+
+        self.shortname = shortname
+        self.resource = resource
+
+    def __str__(self):
+        return f'{self.shortname}'
 
 @dataclass
 class Translation:
@@ -927,6 +941,14 @@ class ResourcePack(Pack):
 
     
     @cached_property
+    def animations(self) -> list[AnimationRP]:
+        children = []
+        for file in self.animation_files:
+            for child in file.animations:
+                children.append(child)
+        return children
+
+    @cached_property
     def render_controllers(self) -> list[RenderControllerRP]:
         children = []
         for file in self.render_controller_files:
@@ -994,6 +1016,13 @@ class ResourcePack(Pack):
         raise AssetNotFoundError(file_name)
 
     
+    def get_animation(self, id:str) -> AnimationRP:
+        for file_child in self.animation_files:
+            for child in file_child.animations:
+                if smart_compare(child.id, id):
+                    return child
+        raise AssetNotFoundError(id)
+
     def get_render_controller(self, id:str) -> RenderControllerRP:
         for file_child in self.render_controller_files:
             for child in file_child.render_controllers:
@@ -1478,7 +1507,6 @@ class BlockFileBP(JsonFileResource):
 class EntityFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__animations = []
         
     
     @property
@@ -1489,12 +1517,6 @@ class EntityFileRP(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:client_entity/description/identifier", identifier)
 
-    
-    @cached_property
-    def animations(self) -> list[AnimationRP]:
-        for path, data in self.get_data_at("minecraft:client_entity/description/animations/*"):
-            self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
-        return self.__animations
     
     
     

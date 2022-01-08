@@ -156,6 +156,31 @@ class TestParticle(unittest.TestCase):
         self.assertEqual(component.get_jsonpath('num_particles'), 20)
         self.assertEqual(component.data['num_particles'], 20)
 
+class TestEntityFileRP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.entity = self.rp.get_entity('minecraft:dolphin')
+
+    def test_entity_file_path(self):
+        """
+        Tests that the entity file path is correct.
+        """
+
+        # Check filepath
+        self.assertEqual(self.entity.file_path, 'entity\\dolphin.entity.json')
+
+    def test_animations(self):
+        """
+        Tests the key-value pair situation
+        """
+
+        animations = self.entity.animations
+        self.assertEqual(len(animations), 1)
+
+        animation = animations[0]
+        self.assertEqual(animation.shortname, 'move')
+        self.assertEqual(animation.resource.id, 'animation.dolphin.move')
+
 class TestJsonPathAccess(unittest.TestCase):
     """
     Test various jsonpath access methods.

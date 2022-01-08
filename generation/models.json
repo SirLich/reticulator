@@ -5,6 +5,15 @@
             "class": "ResourcePack",
             "sub_resources": [
                 {
+                    "class": "AnimationRP",
+                    "name": "animations",
+                    "from_child": "animation_files",
+                    "getter": {
+                        "name": "get_animation",
+                        "property": "id"
+                    }
+                },
+                {
                     "class": "RenderControllerRP",
                     "name": "render_controllers",
                     "from_child": "render_controller_files",
@@ -381,13 +390,6 @@
                 {
                     "json_path": "minecraft:client_entity/description/identifier",
                     "name": "identifier"
-                }
-            ],
-            "sub_resources": [
-                {
-                    "class": "AnimationRP",
-                    "json_path": "minecraft:client_entity/description/animations/*",
-                    "name": "animations"
                 }
             ]
         },
