@@ -129,22 +129,21 @@ class NotifyList(list):
             return self.__getitem__(attr)
         except:
             return None
-
-    def append(self, value):
-        if isinstance(value, dict):
-            value = NotifyDict(value, owner=self.__owner)
-        if isinstance(value, list):
-            value = NotifyList(value, owner=self.__owner)
-
-        if(self.__owner != None):
-            self.__owner.dirty = True
-
-        super().append(value)
-        
+    
     def __delitem__(self, v) -> None:
         if(self.__owner != None):
             self.__owner.dirty = True
         return super().__delitem__(v)
+    
+    def append(self, v):
+        if(self.__owner != None):
+            self.__owner.dirty = True
+        super().append(v)
+
+    def extend(self, v):
+        if(self.__owner != None):
+            self.__owner.dirty = True
+        super().extend(v)
 
     def __setitem__(self, attr, value):
         if isinstance(value, dict):
@@ -491,13 +490,41 @@ class JsonSubResource(JsonResource):
     """
     def __init__(self, parent: Resource = None, json_path: str = None, data: dict = None) -> None:
         super().__init__(data = data, pack = parent.pack, file = parent.file)
+
+        # The parent of the sub-resource is the asset of type Resource
+        # which owns this sub-resource. For example a Component is owned by
+        # either an EntityFileBP, or a ComponentGroup.
         self.parent = parent
+
+        # The jsonpath is the location within the parent resource, where
+        # this sub-resource is stored.
         self.json_path = json_path
-        self.id = self.get_id_from_jsonpath(json_path)
+
+        # The ID is the "leaf name" of the subresources jsonpath.
+        # For example a 'minecraft:scale' component has an ID of 
+        # 'minecraft:scale', and a data of {'value': 1.0}
+        self._id = self.get_id_from_jsonpath(json_path)
+
+        # The data is the actual data of the sub-resource, minus the id.
+        # For example a 'minecraft:scale' component has a data of {'value': 1.0}
         self.data = self.convert_to_notify(data)
+
+        # Internal list of resources that are children of this sub-resource.
         self._resources: JsonSubResource = []
+
+        # Register self into parent, so that it can be found by the parent
+        # during saving, etc.
         self.parent.register_resource(self)
     
+    @property
+    def id(self):
+        return self._id
+
+    @id.setter
+    def id(self, id):
+        self.dirty = True
+        self._id = id
+
     # TODO This feels wrong?
     def get_id_from_jsonpath(self, json_path):
         return json_path.split("/")[-1]

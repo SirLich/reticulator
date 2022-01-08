@@ -1,5 +1,6 @@
 import unittest
 import sys
+import functools
 
 sys.path.insert(0, '../reticulator')
 from reticulator import *
@@ -67,57 +68,61 @@ class TestDirty(unittest.TestCase):
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
         self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
+        self.component = self.entity.get_component('minecraft:type_family')
 
+    def assert_dirties(attribute):
+        """
+        Wrapper, which ensures that the resource is dirty, after the function is called.
+        Attribute is passed in as a string, since `self` context is only available at runtime.
+        """
+        def _implementation(func):
+            @functools.wraps(func)
+            def wrapper(self, *args):
+                resource = getattr(self, attribute)
+                self.assertEqual(resource.dirty, False)
+                func(self, *args)
+                self.assertEqual(resource.dirty, True)
+            return wrapper
+        return _implementation
+
+
+    @assert_dirties('function')
     def test_list_append(self):
-        self.assertEqual(self.function.dirty, False)
         self.function.commands.append('a new command!')
-        self.assertEqual(self.function.dirty, True)
 
+    @assert_dirties('function')
     def test_list_delete(self):
-        self.assertEqual(self.function.dirty, False)
         del self.function.commands[0]
-        self.assertEqual(self.function.dirty, True)
 
+    @assert_dirties('function')
     def test_list_edit(self):
-        self.assertEqual(self.function.dirty, False)
         self.function.commands[0] = 'new command'
-        self.assertEqual(self.function.dirty, True)
 
-    def test_property(self):
-        self.assertEqual(self.entity.dirty, False)
-        self.entity.identifier = 'bob'
-        self.assertEqual(self.entity.dirty, True)
-
-    def test_jsonpath(self):
-        self.assertEqual(self.entity.dirty, False)
-        self.entity.set_jsonpath('new_key', {})
-        self.assertEqual(self.entity.dirty, True)
-
-    def test_data(self):
-        self.assertEqual(self.entity.dirty, False)
+    @assert_dirties('entity')
+    def test_dict_list_insert(self):
         self.entity.data['new_key'] = []
-        self.assertEqual(self.entity.dirty, True)
 
+    @assert_dirties('entity')
+    def test_property(self):
+        self.entity.identifier = 'bob'
+
+    @assert_dirties('entity')
+    def test_jsonpath(self):
+        self.entity.set_jsonpath('new_key', {})
+
+    @assert_dirties('entity')
+    def test_data(self):
+        self.entity.data['new_key'] = []
+
+    @assert_dirties('component')
+    @assert_dirties('entity')
     def test_subresource(self):
-        component = self.entity.get_component('minecraft:type_family')
-        self.assertEqual(self.entity.dirty, False)
-        self.assertEqual(component.dirty, False)
+        self.component.set_jsonpath('new_key', "")
 
-        component.set_jsonpath('new_key', "")
-
-        self.assertEqual(self.entity.dirty, True)
-        self.assertEqual(component.dirty, True)
-
-    @unittest.skip("id-based dirty is not implemented")
+    @assert_dirties('component')
+    @assert_dirties('entity')
     def test_subresource_id(self):
-        component = self.entity.get_component('minecraft:type_family')
-        self.assertEqual(self.entity.dirty, False)
-        self.assertEqual(component.dirty, False)
-
-        component.id = 'new_component_name'
-
-        self.assertEqual(self.entity.dirty, True)
-        self.assertEqual(component.dirty, True)
+        self.component.id = 'new_component_name'
 
 class TestParticle(unittest.TestCase):
     def setUp(self) -> None:
