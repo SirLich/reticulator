@@ -25,8 +25,13 @@ class TestFunctions(unittest.TestCase):
         """
         The first function has 1 command, the second has 2
         """
+
+        # With stripping on
         self.assertEqual(len(self.bp.functions[0].commands), 2)
         self.assertEqual(len(self.bp.functions[1].commands), 1)
+
+        # With stripping off
+        # TODO
     
     def test_getting_function(self):
         # Getting function by path can take multiple path formats
@@ -61,6 +66,22 @@ class TestDirty(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
+        self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
+
+    def test_list_append(self):
+        self.assertEqual(self.function.dirty, False)
+        self.function.commands.append('a new command!')
+        self.assertEqual(self.function.dirty, True)
+
+    def test_list_delete(self):
+        self.assertEqual(self.function.dirty, False)
+        del self.function.commands[0]
+        self.assertEqual(self.function.dirty, True)
+
+    def test_list_edit(self):
+        self.assertEqual(self.function.dirty, False)
+        self.function.commands[0] = 'new command'
+        self.assertEqual(self.function.dirty, True)
 
     def test_property(self):
         self.assertEqual(self.entity.dirty, False)

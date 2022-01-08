@@ -129,6 +129,8 @@ class NotifyList(list):
             return self.__getitem__(attr)
         except:
             return None
+    
+    # TODO We must add support for setting item here (current implementation is faulty)
 
     def __setitem__(self, attr, value):
         if isinstance(value, dict):
@@ -560,6 +562,7 @@ class FunctionFile(FileResource):
     A FunctionFile is a function file, such as run.mcfunction, and is
     made up of many commands.
     """
+
     def __init__(self, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(file_path=file_path, pack=pack)
         self.__commands : list[str] = []
@@ -570,8 +573,12 @@ class FunctionFile(FileResource):
             for line in function_file.readlines():
                 if line.strip() and not line.startswith("#"):
                     self.__commands.append(line)
+        self.__commands = NotifyList(self.__commands, owner=self)
         return self.__commands
 
+    def _is_dirty():
+        pass
+    
     def _save(self):
         path = os.path.join(self.pack.output_path, self.file_path)
         create_nested_directory(path)
