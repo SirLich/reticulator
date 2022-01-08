@@ -12,6 +12,8 @@ from send2trash import send2trash
 import copy
 import dpath.util
 
+NO_ARGUMENT = object()
+
 def create_nested_directory(path: str):
     """
     Creates a nested directory structure if it doesn't exist.
@@ -30,6 +32,18 @@ def freeze(o):
         return tuple(freeze(v) for v in o)
 
     return hash(o)
+
+def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
+    """
+    Converts a dict or list to a notify structure.
+    """
+    if isinstance(data, dict):
+        return NotifyDict(data, owner=parent)
+
+    if isinstance(data, list):
+        return NotifyList(data, owner=parent)
+
+    return data
 
 def smart_compare(a, b):
     """
@@ -66,7 +80,6 @@ class AmbiguousAssetError(ReticulatorException):
     Called when a path is not unique
     """
 
-# TODO: Replace these with a hash-based edit-detection method?
 class NotifyDict(dict):
     """
     A notify dictionary is a dictionary that can notify its parent when its been
@@ -77,10 +90,7 @@ class NotifyDict(dict):
 
         if len(args) > 0:
             for key, value in args[0].items():
-                if isinstance(value, dict):
-                    args[0][key] = NotifyDict(value, owner=self.__owner)
-                if isinstance(value, list):
-                    args[0][key] = NotifyList(value, owner=self.__owner)
+                args[0][key] = convert_to_notify_structure(value, self.__owner)
         super().__init__(*args, **kwargs)
 
 
@@ -96,10 +106,7 @@ class NotifyDict(dict):
         return super().__delitem__(v)
 
     def __setitem__(self, attr, value):
-        if isinstance(value, dict):
-            value = NotifyDict(value, owner=self.__owner)
-        if isinstance(value, list):
-            value = NotifyList(value, owner=self.__owner)
+        value = convert_to_notify_structure(value, self.__owner)
 
         if self.get_item(attr) != value:
             if(self.__owner != None):
@@ -117,10 +124,7 @@ class NotifyList(list):
 
         if len(args) > 0:
             for i in range(len(args[0])):
-                if isinstance(args[0][i], dict):
-                    args[0][i] = NotifyDict(args[0][i], owner=self.__owner)
-                if isinstance(args[0][i], list):
-                    args[0][i] = NotifyList(args[0][i], owner=self.__owner)
+                args[0][i] = convert_to_notify_structure(args[0][i], self.__owner)
 
         super().__init__(*args, **kwargs)
 
@@ -146,20 +150,13 @@ class NotifyList(list):
         super().extend(v)
 
     def __setitem__(self, attr, value):
-        if isinstance(value, dict):
-            value = NotifyDict(value, owner=self.__owner)
-        if isinstance(value, list):
-            value = NotifyList(value, owner=self.__owner)
+        value = convert_to_notify_structure(value, self.__owner)
 
         if self.__getitem__(attr) != value:
             if(self.__owner != None):
                 self.__owner.dirty = True
         
         super().__setitem__(attr, value)
-
-# endregion
-
-NO_ARGUMENT = object()
 
 class Resource():
     """
@@ -341,7 +338,7 @@ class JsonResource(Resource):
 
     def __init__(self, data: dict = None, file: FileResource = None, pack: Pack = None) -> None:
         super().__init__(file=file, pack=pack)
-        self.data = self.convert_to_notify(data)
+        self.data = convert_to_notify_structure(data, self)
 
     def _save(self):
         raise NotImplementedError("This json resource cannot be saved.")
@@ -349,14 +346,6 @@ class JsonResource(Resource):
     def _delete(self):
         raise NotImplementedError("This json resource cannot be deleted.")
 
-    def convert_to_notify(self, raw_data):
-        if isinstance(raw_data, dict):
-            return NotifyDict(raw_data, owner=self)
-
-        if isinstance(raw_data, list):
-            return NotifyList(raw_data, owner=self)
-
-        return raw_data
 
     def __str__(self):
         return json.dumps(self.data, indent=2, ensure_ascii=False)
@@ -468,9 +457,9 @@ class JsonFileResource(FileResource, JsonResource):
         # resource. This allows assets to be created from scratch, whilst
         # still having an associated file location.
         if data is not None:
-            self.data = NotifyDict(data, owner=self)
+            self.data = convert_to_notify_structure(data, self)
         else:
-            self.data = NotifyDict(self.pack.load_json(self.file_path), owner=self)
+            self.data = convert_to_notify_structure(self.pack.load_json(self.file_path), self)
 
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
@@ -507,7 +496,7 @@ class JsonSubResource(JsonResource):
 
         # The data is the actual data of the sub-resource, minus the id.
         # For example a 'minecraft:scale' component has a data of {'value': 1.0}
-        self.data = self.convert_to_notify(data)
+        self.data = convert_to_notify_structure(data, self)
 
         # Internal list of resources that are children of this sub-resource.
         self._resources: JsonSubResource = []
@@ -528,15 +517,6 @@ class JsonSubResource(JsonResource):
     # TODO This feels wrong?
     def get_id_from_jsonpath(self, json_path):
         return json_path.split("/")[-1]
-
-    def convert_to_notify(self, raw_data):
-        if isinstance(raw_data, dict):
-            return NotifyDict(raw_data, owner=self)
-
-        if isinstance(raw_data, list):
-            return NotifyList(raw_data, owner=self)
-
-        return raw_data
 
     def __str__(self):
         """
@@ -1499,6 +1479,7 @@ class EntityFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations = []
+        
     
     @property
     def identifier(self):
