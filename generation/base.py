@@ -529,6 +529,7 @@ class JsonSubResource(JsonResource):
     def get_id_from_jsonpath(self, json_path):
         return json_path.split("/")[-1]
 
+    # TODO remove this from this class, and move 
     def convert_to_notify(self, raw_data):
         if isinstance(raw_data, dict):
             return NotifyDict(raw_data, owner=self)

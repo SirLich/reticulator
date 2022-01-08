@@ -1499,7 +1499,6 @@ class EntityFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations = []
-        
     
     @property
     def identifier(self):
