@@ -619,10 +619,6 @@ class Command(Resource):
     def __init__(self, command: str, file: FileResource = None, pack: Pack = None) -> None:
         super().__init__(file=file, pack=pack)
 
-        # Register self into file, for purpose of saving
-        if file:
-            self.file.register_resource(self)
-
         # The 'data' is the actual command, which is stored as a string.
         self._data: str = command
 
@@ -638,7 +634,7 @@ class Command(Resource):
     @property
     def dirty(self):
         return self._dirty
-        
+
     @dirty.setter
     def dirty(self, dirty):
         """
@@ -691,7 +687,6 @@ class FunctionFile(FileResource):
         path = os.path.join(self.pack.output_path, self.file_path)
         create_nested_directory(path)
         with open(path, 'w', encoding='utf-8') as file:
-            print(f"SAVING {self.file_name} with {len(self.commands)} commands.")
             for command in self.commands:
                 file.write(command.data + '\n')
 

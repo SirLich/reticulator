@@ -1,7 +1,8 @@
 # How to Release
 
  - Create all your changes
- - Run `generator.py`
+ - Create + Run Tests
+ <!-- - Run `generator.py`  -->
  - Set version in `setup.py`
  - Commit and push everything
  - Tag the repository: `git tag -a v0.0.9-beta`
