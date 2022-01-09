@@ -27,12 +27,13 @@ class TestFunctions(unittest.TestCase):
         The first function has 1 command, the second has 2
         """
 
-        # With stripping on
-        self.assertEqual(len(self.bp.functions[0].commands), 2)
-        self.assertEqual(len(self.bp.functions[1].commands), 1)
-
         # With stripping off
-        # TODO
+        self.assertEqual(len(self.bp.functions[0].commands), 4)
+        self.assertEqual(len(self.bp.functions[1].commands), 2)
+
+        # With stripping on
+        self.bp.functions[0].strip_comments() # Strips 2 comments from the first function
+        self.assertEqual(len(self.bp.functions[0].commands), 2) 
     
     def test_getting_function(self):
         # Getting function by path can take multiple path formats
@@ -42,6 +43,14 @@ class TestFunctions(unittest.TestCase):
     def test_non_existent_function(self):
         with self.assertRaises(AssetNotFoundError):
             self.bp.get_function('functions/no_function.mcfunction')
+
+    def test_editing_command(self):
+        function = self.bp.functions[0]
+        command = function.commands[0]
+
+        self.assertEqual(command.data, '# Remove all entities except players')
+        command.data = 'new'
+        self.assertEqual(command.data, 'new')
 
 class TestRecipes(unittest.TestCase):
     def setUp(self) -> None:
@@ -68,6 +77,7 @@ class TestDirty(unittest.TestCase):
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
         self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
+        self.command = self.function.commands[0]
         self.component = self.entity.get_component('minecraft:type_family')
 
     def assert_dirties(attribute):
@@ -96,7 +106,7 @@ class TestDirty(unittest.TestCase):
 
     @assert_dirties('function')
     def test_list_edit(self):
-        self.function.commands[0] = 'new command'
+        self.function.commands[0].data = 'new command'
 
     @assert_dirties('entity')
     def test_dict_list_insert(self):

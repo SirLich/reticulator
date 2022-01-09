@@ -12,8 +12,6 @@ from send2trash import send2trash
 import copy
 import dpath.util
 
-from generation.base import ShortnameResourcePair
-
 NO_ARGUMENT = object()
 
 def create_nested_directory(path: str):
@@ -518,6 +516,9 @@ class JsonSubResource(JsonResource):
     def get_id_from_jsonpath(self, json_path):
         return json_path.split("/")[-1]
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}: {self.id}"
+
     def __str__(self):
         """
         Returns string representation of this resource.
@@ -607,6 +608,55 @@ class Translation:
     value: str
     comment: str
 
+class Command(Resource):
+    """
+    A command is a wrapper around a string, which represents a single command
+    in a function file.
+
+    To use this class, you can access the 'data' property, and treat it like
+    a string.
+    """
+    def __init__(self, command: str, file: FileResource = None, pack: Pack = None) -> None:
+        super().__init__(file=file, pack=pack)
+
+        # Register self into file, for purpose of saving
+        if file:
+            self.file.register_resource(self)
+
+        # The 'data' is the actual command, which is stored as a string.
+        self._data: str = command
+
+    @property
+    def data(self):
+        return self._data
+    
+    @data.setter
+    def data(self, data):
+        self._data = data
+        self.dirty = True
+
+    @property
+    def dirty(self):
+        return self._dirty
+        
+    @dirty.setter
+    def dirty(self, dirty):
+        """
+        When a command is marked as dirty, it must propagate this to the
+        file, so that the file can be marked as dirty.
+        """
+        self._dirty = dirty
+        self.file.dirty = dirty
+
+    def is_comment(self):
+        return self.data.startswith("#")
+
+    def __str__(self):
+        return self.data
+
+    def __repr__(self):
+        return f"Function: '{self.data}'"
+
 class FunctionFile(FileResource):
     """
     A FunctionFile is a function file, such as run.mcfunction, and is
@@ -615,26 +665,35 @@ class FunctionFile(FileResource):
 
     def __init__(self, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(file_path=file_path, pack=pack)
-        self.__commands : list[str] = []
+        self.__commands : list[Command] = []
     
+    def strip_comments(self):
+        """
+        Strips all comments from the function file.
+        Generally should be used before accessing and using the `commands` property.
+        """
+        self.commands = [c for c in self.commands if not c.is_comment()]
+
     @cached_property
-    def commands(self) -> list[str]:
+    def commands(self) -> list[Command]:
+        """
+        The list of commands in this function file. Every line represents a Command.
+        """
         with open(os.path.join(self.pack.input_path, self.file_path), "r", encoding='utf-8') as function_file:
             for line in function_file.readlines():
-                if line.strip() and not line.startswith("#"):
-                    self.__commands.append(line)
+                command = line.strip()
+                if command:
+                    self.__commands.append(Command(command, file=self, pack=self.pack))
         self.__commands = NotifyList(self.__commands, owner=self)
         return self.__commands
-
-    def _is_dirty():
-        pass
     
     def _save(self):
         path = os.path.join(self.pack.output_path, self.file_path)
         create_nested_directory(path)
         with open(path, 'w', encoding='utf-8') as file:
+            print(f"SAVING {self.file_name} with {len(self.commands)} commands.")
             for command in self.commands:
-                file.write(command)
+                file.write(command.data + '\n')
 
 class LanguageFile(FileResource):
     """
@@ -1398,8 +1457,7 @@ class AnimationControllerFileRP(JsonFileResource):
 class SpawnRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        
-    
+
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:spawn_rules/description/identifier")
@@ -1411,37 +1469,27 @@ class SpawnRuleFile(JsonFileResource):
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
-    
+
     @format_version.setter
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
-    
-    
-    
-    
 class LootTableFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__pools = []
-        
-    
-    
+
     @cached_property
     def pools(self) -> list[LootTablePool]:
         for path, data in self.get_data_at("pools/*"):
             self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
-    
-    
-    
-    
+
 class ItemFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
-        
-    
+
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:item/description/identifier")
@@ -1464,16 +1512,12 @@ class ItemFileRP(JsonFileResource):
         for path, data in self.get_data_at("minecraft:item/components/*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
-    
-    
-    
-    
+
 class ItemFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
-        
-    
+
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:item/description/identifier")
@@ -1482,22 +1526,17 @@ class ItemFileBP(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:item/description/identifier", identifier)
 
-    
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("minecraft:item/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
-    
-    
-    
-    
+
 class BlockFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
-        
-    
+
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:block/description/identifier")
@@ -1506,7 +1545,6 @@ class BlockFileBP(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:block/description/identifier", identifier)
 
-    
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("minecraft:block/components"):
@@ -1520,7 +1558,7 @@ class EntityFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations: ShortnameResourceTriple = []
-        self.__models: ShortnameResourcePair = []
+        self.__models: ShortnameResourceTriple = []
 
     @property
     def identifier(self) -> str:
@@ -1529,6 +1567,13 @@ class EntityFileRP(JsonFileResource):
     @identifier.setter
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:client_entity/description/identifier", identifier)
+
+    @property
+    def counterpart(self) -> EntityFileBP:
+        try:
+            return self.pack.project.behavior_pack.get_entity(self.identifier)
+        except ReticulatorException:
+            return None
 
     @cached_property
     def animations(self) -> list[ShortnameResourceTriple]:
