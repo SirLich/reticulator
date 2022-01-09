@@ -288,4 +288,6 @@ def generate(base, models, generated):
 def main():
     generate("base.py", "models.json", "../reticulator/reticulator.py")
 
-main()
+# Uncomment to run the script
+# main()
+print("This script is currently not used.")

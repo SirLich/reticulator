@@ -156,6 +156,43 @@ class TestParticle(unittest.TestCase):
         self.assertEqual(component.get_jsonpath('num_particles'), 20)
         self.assertEqual(component.data['num_particles'], 20)
 
+class TestShortnameResourceTriple(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.dolphin = self.rp.get_entity('minecraft:dolphin')
+        self.elder_guardian = self.rp.get_entity('minecraft:elder_guardian')
+
+    def test_existing_resources(self):
+        """
+        Tests that we can generate and use a ShortnameResourceTriple
+        """
+
+        animations = self.dolphin.animations
+        self.assertEqual(len(animations), 1)
+
+        animation = animations[0]
+        self.assertEqual(animation.shortname, 'move')
+        self.assertEqual(animation.resource.id, 'animation.dolphin.move')
+        self.assertEqual(animation.id, 'animation.dolphin.move')
+        self.assertEqual(animation.exists(), True)
+
+    def test_missing_resources(self):
+        """
+        Test the behavior of ShortnameResourceTriple when the resource is missing.
+        """
+
+        animations = self.elder_guardian.animations
+        self.assertEqual(len(animations), 5)
+
+        # Get the last animation, which is missing
+        animation = animations[-1]
+
+        self.assertEqual(animation.shortname, 'missing')
+        self.assertEqual(animation.id, 'animation.guardian.missing')
+        self.assertEqual(animation.resource, None)
+        self.assertEqual(animation.exists(), False)
+
+
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -168,18 +205,6 @@ class TestEntityFileRP(unittest.TestCase):
 
         # Check filepath
         self.assertEqual(self.entity.file_path, 'entity\\dolphin.entity.json')
-
-    def test_animations(self):
-        """
-        Tests the key-value pair situation
-        """
-
-        animations = self.entity.animations
-        self.assertEqual(len(animations), 1)
-
-        animation = animations[0]
-        self.assertEqual(animation.shortname, 'move')
-        self.assertEqual(animation.resource.id, 'animation.dolphin.move')
 
 class TestJsonPathAccess(unittest.TestCase):
     """
