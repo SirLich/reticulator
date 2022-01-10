@@ -1220,11 +1220,16 @@ class BehaviorPack(Pack):
     
     def get_function(self, file_path:str) -> FunctionFile:
         for child in self.functions:
-            if smart_compare(child.file_path, file_path):
+            if smart_compare(child.file_path, os.path.join('functions', file_path)):
                 return child
         raise AssetNotFoundError(file_path)
 
     def get_feature_rules_file(self, identifier:str) -> FeatureRulesFileBP:
+        """
+        Gets a feature rules file by its identifier.
+
+        For example
+        """
         for child in self.feature_rules_files:
             if smart_compare(child.identifier, identifier):
                 return child
