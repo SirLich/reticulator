@@ -665,6 +665,8 @@ class FunctionFile(FileResource):
         super().__init__(file_path=file_path, pack=pack)
         self.__commands : list[Command] = []
     
+    parent_folder = "functions"
+
     def strip_comments(self):
         """
         Strips all comments from the function file.
@@ -1269,12 +1271,10 @@ class BehaviorPack(Pack):
         Example: bp.get_function('teleport/home.mcfunction')
         """
         for child in self.functions:
-            try:
-                if os.path.samefile(child.file_path, os.path.join('functions', file_path)):
-                    return child
-            except OSError as e:
-                raise AssetNotFoundError(f"Malformed filepath: {file_path}") from e
-        raise AssetNotFoundError(f"Asset does not exist: {file_path}")
+            path_to_try = os.path.join(FunctionFile.parent_folder, file_path)
+            if smart_compare(child.file_path, path_to_try):
+                return child
+        raise AssetNotFoundError(f"Function with path '{path_to_try}' does not exist.")
 
     def get_feature_rule_file(self, identifier:str) -> FeatureRuleFile:
         """
