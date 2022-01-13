@@ -45,7 +45,7 @@ def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Un
 
     return data
 
-def smart_compare(a, b):
+def smart_compare(a, b) -> bool:
     """
     Compares to objects using ==, but if they can both be interpreted as
     path-like objects, it uses path comparison.
@@ -86,13 +86,12 @@ class NotifyDict(dict):
     edited.
     """
     def __init__(self, *args, owner: Resource = None, **kwargs):
-        self.__owner = owner
+        self._owner = owner
 
         if len(args) > 0:
             for key, value in args[0].items():
-                args[0][key] = convert_to_notify_structure(value, self.__owner)
+                args[0][key] = convert_to_notify_structure(value, self._owner)
         super().__init__(*args, **kwargs)
-
 
     def get_item(self, attr):
         try:
@@ -101,16 +100,16 @@ class NotifyDict(dict):
             return None
     
     def __delitem__(self, v) -> None:
-        if(self.__owner != None):
-            self.__owner.dirty = True
+        if(self._owner != None):
+            self._owner.dirty = True
         return super().__delitem__(v)
 
     def __setitem__(self, attr, value):
-        value = convert_to_notify_structure(value, self.__owner)
+        value = convert_to_notify_structure(value, self._owner)
 
         if self.get_item(attr) != value:
-            if(self.__owner != None):
-                self.__owner.dirty = True
+            if(self._owner != None):
+                self._owner.dirty = True
 
         super().__setitem__(attr, value)
 
@@ -120,11 +119,11 @@ class NotifyList(list):
     changed.
     """
     def __init__(self, *args, owner: Resource = None, **kwargs):
-        self.__owner = owner
+        self._owner = owner
 
         if len(args) > 0:
             for i in range(len(args[0])):
-                args[0][i] = convert_to_notify_structure(args[0][i], self.__owner)
+                args[0][i] = convert_to_notify_structure(args[0][i], self._owner)
 
         super().__init__(*args, **kwargs)
 
@@ -135,26 +134,26 @@ class NotifyList(list):
             return None
     
     def __delitem__(self, v) -> None:
-        if(self.__owner != None):
-            self.__owner.dirty = True
+        if(self._owner != None):
+            self._owner.dirty = True
         return super().__delitem__(v)
     
     def append(self, v):
-        if(self.__owner != None):
-            self.__owner.dirty = True
+        if(self._owner != None):
+            self._owner.dirty = True
         super().append(v)
 
     def extend(self, v):
-        if(self.__owner != None):
-            self.__owner.dirty = True
+        if(self._owner != None):
+            self._owner.dirty = True
         super().extend(v)
 
     def __setitem__(self, attr, value):
-        value = convert_to_notify_structure(value, self.__owner)
+        value = convert_to_notify_structure(value, self._owner)
 
         if self.__getitem__(attr) != value:
-            if(self.__owner != None):
-                self.__owner.dirty = True
+            if(self._owner != None):
+                self._owner.dirty = True
         
         super().__setitem__(attr, value)
 
@@ -462,6 +461,9 @@ class JsonFileResource(FileResource, JsonResource):
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
+    # This should always be set, on a child class
+    parent_folder = "UNDEFINED"
+
     def _save(self):
         self.pack.save_json(self.file_path, self.data)
 
@@ -764,23 +766,22 @@ class Pack():
     def __init__(self, input_path: str, project=None):
         self.resources = []
         self.__language_files = []
-        self.__project = project
-        self.input_path = input_path
-        self.output_path = input_path
+        self._project = project
+
+        # The input path is the path to the folder containing the pack.
+        self.input_path: str = input_path
+
+        # The output path is the path to the output directory, where this
+        # pack will be saved. This is the same as the input path, unless
+        # explicitely saved.
+        self.output_path: str = input_path
 
     @cached_property
     def project(self) -> Project:
         """
         Get the project that this pack is part of. May be None.
         """
-        return self.__project
-
-    def set_output_location(self, output_path: str) -> None:
-        """
-        The output location will be used when saving, to determine where files
-        will be exported.
-        """
-        self.output_path = output_path
+        return self._project
 
     def load_json(self, local_path: str) -> dict:
         """
@@ -923,22 +924,21 @@ class Project():
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
-        self.__particles = []
-        self.__attachables = []
-        self.__animation_controller_files = []
-        self.__animation_files = []
-        self.__entities = []
-        self.__model_files = []
-        self.__render_controller_files = []
-        self.__items = []
-        
-    
+        self.__particles: ParticleFile = []
+        self.__attachables: AttachableFileRP = []
+        self.__animation_controller_files: AnimationControllerFileRP = []
+        self.__animation_files: AnimationControllerFileRP = []
+        self.__entities: EntityFileRP = []
+        self.__model_files: ModelFile = []
+        self.__render_controller_files: RenderControllerFile = []
+        self.__items: ItemFileRP = []
+
     @cached_property
-    def particles(self) -> list[ParticleFileRP]:
+    def particles(self) -> list[ParticleFile]:
         base_directory = os.path.join(self.input_path, "particles")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__particles.append(ParticleFileRP(file_path = local_path, pack = self))
+            self.__particles.append(ParticleFile(file_path = local_path, pack = self))
             
         return self.__particles
 
@@ -979,20 +979,20 @@ class ResourcePack(Pack):
         return self.__entities
 
     @cached_property
-    def model_files(self) -> list[ModelFileRP]:
+    def model_files(self) -> list[ModelFile]:
         base_directory = os.path.join(self.input_path, "models")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__model_files.append(ModelFileRP(file_path = local_path, pack = self))
+            self.__model_files.append(ModelFile(file_path = local_path, pack = self))
             
         return self.__model_files
 
     @cached_property
-    def render_controller_files(self) -> list[RenderControllerFileRP]:
+    def render_controller_files(self) -> list[RenderControllerFile]:
         base_directory = os.path.join(self.input_path, "render_controllers")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__render_controller_files.append(RenderControllerFileRP(file_path = local_path, pack = self))
+            self.__render_controller_files.append(RenderControllerFile(file_path = local_path, pack = self))
             
         return self.__render_controller_files
 
@@ -1005,7 +1005,6 @@ class ResourcePack(Pack):
             
         return self.__items
 
-    
     @cached_property
     def animations(self) -> list[AnimationRP]:
         children = []
@@ -1015,7 +1014,7 @@ class ResourcePack(Pack):
         return children
 
     @cached_property
-    def render_controllers(self) -> list[RenderControllerRP]:
+    def render_controllers(self) -> list[RenderController]:
         children = []
         for file in self.render_controller_files:
             for child in file.render_controllers:
@@ -1038,63 +1037,111 @@ class ResourcePack(Pack):
                 children.append(child)
         return children
 
-    
-    def get_particle(self, identifier:str) -> ParticleFileRP:
+    def get_particle(self, identifier:str) -> ParticleFile:
         for child in self.particles:
             if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
 
     def get_attachable(self, identifier:str) -> AttachableFileRP:
-        for child in self.attachables:
-            if smart_compare(child.identifier, identifier):
-                return child
-        raise AssetNotFoundError(identifier)
+        """
+        Gets an AttachableFileRP by its identifier.
 
-    def get_animation_controller_file(self, file_name:str) -> AnimationControllerFileRP:
-        for child in self.animation_controller_files:
-            if smart_compare(child.file_name, file_name):
-                return child
-        raise AssetNotFoundError(file_name)
+        Example: get_attachable("reticulator:sabatons")
+        """
+        for attachable in self.attachables:
+            if smart_compare(attachable.identifier, identifier):
+                return attachable
+        raise AssetNotFoundError(f"Attachable with identifier '{identifier}' not does not exist.")
 
-    def get_animation_file(self, file_name:str) -> AnimationFileRP:
+    def get_animation_controller_file(self, file_path:str) -> AnimationControllerFileRP:
+        """
+        Gets the AnimationControllerFileRP with the given path.
+
+        Example: get_animation_controller_file("example.json")
+        """
+        for acf in self.animation_controller_files:
+            path_to_try = os.path.join(AnimationControllerFileRP.parent_folder, file_path)
+            if smart_compare(acf.file_path, path_to_try):
+                return acf
+        raise AssetNotFoundError(f"AnimationControllerFileRP with path '{path_to_try}' does not exist.")
+
+    def get_animation_file(self, file_path:str) -> AnimationFileRP:
+        """
+        Gets the AnimationFileRP with the given path.
+
+        Example: get_animation_file("example.json")
+        """
+        
         for child in self.animation_files:
-            if smart_compare(child.file_name, file_name):
+            path_to_try = os.path.join(AnimationFileRP.parent_folder, file_path)
+            if smart_compare(child.file_path, path_to_try):
                 return child
-        raise AssetNotFoundError(file_name)
+        raise AssetNotFoundError(f"AnimationFileRP with path '{path_to_try}' does not exist.")
 
     def get_entity(self, identifier:str) -> EntityFileRP:
+        """
+        Gets the EntityFileRP with the given identifier.
+
+        Example: get_entity("reticulator:walrus")
+        """
+
         for child in self.entities:
             if smart_compare(child.identifier, identifier):
                 return child
-        raise AssetNotFoundError(identifier)
+        raise AssetNotFoundError(f"Entity with identifier '{identifier}' does not exist.")
 
-    def get_model_file(self, file_name:str) -> ModelFileRP:
-        for child in self.model_files:
-            if smart_compare(child.file_name, file_name):
-                return child
-        raise AssetNotFoundError(file_name)
+    def get_model_file(self, file_name:str) -> ModelFile:
+        """
+        Gets the ModelFile with the given path.
 
-    def get_render_controller_file(self, file_name:str) -> RenderControllerFileRP:
+        Example: get_model_file("example.json")
+        """
+        
+        for model_file in self.model_files:
+            path_to_try = os.path.join(ModelFile.parent_folder, file_name)
+            if smart_compare(model_file.file_path, path_to_try):
+                return model_file
+        raise AssetNotFoundError(f"ModelFile with path '{path_to_try}' does not exist.")
+
+    def get_render_controller_file(self, file_path:str) -> RenderControllerFile:
+        """
+        Gets the RenderControllerFile with the given path.
+        
+        Example: get_render_controller_file("example.json")
+        """
+
         for child in self.render_controller_files:
-            if smart_compare(child.file_name, file_name):
+            path_to_try = os.path.join(RenderControllerFile.parent_folder, file_path)
+            if smart_compare(child.file_path, path_to_try):
                 return child
-        raise AssetNotFoundError(file_name)
+        raise AssetNotFoundError(f"RenderControllerFile with path '{path_to_try}' does not exist.")
 
-    
     def get_animation(self, id:str) -> AnimationRP:
+        """
+        Gets the AnimationRP with the given id, by searching through all animation files.
+
+        Example: get_animation("animation.parrot.idle")
+        """
+
         for file_child in self.animation_files:
             for child in file_child.animations:
                 if smart_compare(child.id, id):
                     return child
-        raise AssetNotFoundError(id)
+        raise AssetNotFoundError(f"Animation with id '{id}' does not exist.")
 
-    def get_render_controller(self, id:str) -> RenderControllerRP:
+    def get_render_controller(self, id:str) -> RenderController:
+        """
+        Gets the RenderControllerRP with the given id, by searching through all render controller files.
+
+        Example: get_render_controller("controller.render.wooly_mammoth")
+        """
+
         for file_child in self.render_controller_files:
             for child in file_child.render_controllers:
                 if smart_compare(child.id, id):
                     return child
-        raise AssetNotFoundError(id)
+        raise AssetNotFoundError(f"RenderController with id '{id}' does not exist.")
 
     def get_animation_controller(self, id:str) -> AnimationControllerRP:
         for file_child in self.animation_controller_files:
@@ -1114,18 +1161,17 @@ class ResourcePack(Pack):
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
-        self.__functions = []
-        self.__features_file = []
-        self.__feature_rules_files = []
-        self.__spawn_rules = []
-        self.__recipes = []
-        self.__entities = []
-        self.__animation_controller_files = []
-        self.__loot_tables = []
-        self.__items = []
-        self.__blocks = []
-        
-    
+        self.__functions: FunctionFile = []
+        self.__features_file: FeatureFileBP= []
+        self.__feature_rules_files: FeatureRuleFile = []
+        self.__spawn_rules: SpawnRuleFile = []
+        self.__recipes: RecipeFile = []
+        self.__entities: EntityFileBP = []
+        self.__animation_controller_files: AnimationControllerFileBP = []
+        self.__loot_tables: LootTableFile = []
+        self.__items: ItemFileBP = []
+        self.__blocks: BlockFileBP = []
+
     @cached_property
     def functions(self) -> list[FunctionFile]:
         base_directory = os.path.join(self.input_path, "functions")
@@ -1136,7 +1182,7 @@ class BehaviorPack(Pack):
         return self.__functions
 
     @cached_property
-    def features_file(self) -> list[FeatureFileBP]:
+    def feature_files(self) -> list[FeatureFileBP]:
         base_directory = os.path.join(self.input_path, "features")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
@@ -1145,11 +1191,11 @@ class BehaviorPack(Pack):
         return self.__features_file
 
     @cached_property
-    def feature_rules_files(self) -> list[FeatureRulesFileBP]:
+    def feature_rule_files(self) -> list[FeatureRuleFile]:
         base_directory = os.path.join(self.input_path, "feature_rules")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__feature_rules_files.append(FeatureRulesFileBP(file_path = local_path, pack = self))
+            self.__feature_rules_files.append(FeatureRuleFile(file_path = local_path, pack = self))
             
         return self.__feature_rules_files
 
@@ -1181,11 +1227,11 @@ class BehaviorPack(Pack):
         return self.__entities
 
     @cached_property
-    def animation_controller_files(self) -> list[AnimationControllerFileRP]:
+    def animation_controller_files(self) -> list[AnimationControllerFileBP]:
         base_directory = os.path.join(self.input_path, "animation_controllers")
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
-            self.__animation_controller_files.append(AnimationControllerFileRP(file_path = local_path, pack = self))
+            self.__animation_controller_files.append(AnimationControllerFileBP(file_path = local_path, pack = self))
             
         return self.__animation_controller_files
 
@@ -1216,71 +1262,101 @@ class BehaviorPack(Pack):
             
         return self.__blocks
 
-    
-    
     def get_function(self, file_path:str) -> FunctionFile:
+        """
+        Gets a FunctionFile by it's filepath.
+
+        Example: bp.get_function('teleport/home.mcfunction')
+        """
         for child in self.functions:
-            if smart_compare(child.file_path, os.path.join('functions', file_path)):
-                return child
-        raise AssetNotFoundError(file_path)
+            try:
+                if os.path.samefile(child.file_path, os.path.join('functions', file_path)):
+                    return child
+            except OSError as e:
+                raise AssetNotFoundError(f"Malformed filepath: {file_path}") from e
+        raise AssetNotFoundError(f"Asset does not exist: {file_path}")
 
-    def get_feature_rules_file(self, identifier:str) -> FeatureRulesFileBP:
+    def get_feature_rule_file(self, identifier:str) -> FeatureRuleFile:
         """
-        Gets a feature rules file by its identifier.
+        Gets a FeatureRuleFile file by its identifier.
 
-        For example
+        Example: bp.get_feature_rule_file('reticulator:overworld_underground_tin_ore')
         """
-        for child in self.feature_rules_files:
+        for child in self.feature_rule_files:
             if smart_compare(child.identifier, identifier):
                 return child
-        raise AssetNotFoundError(identifier)
+        raise AssetNotFoundError(f"FeatureRuleFile with identifier '{identifier}' could not be found.")
 
     def get_spawn_rule(self, identifier:str) -> SpawnRuleFile:
+        """
+        Gets a SpawnRuleFile by its identifier.
+
+        Example: bp.get_spawn_rule('reticulator:tin_ore_feature')
+        """
         for child in self.spawn_rules:
             if smart_compare(child.identifier, identifier):
                 return child
-        raise AssetNotFoundError(identifier)
+        raise AssetNotFoundError(f"SpawnRuleFile with identifier '{identifier}' could not be found.")
 
     def get_recipe(self, identifier:str) -> RecipeFile:
+        """
+        Gets a RecipeFile by its identifier.
+
+        Example: bp.get_recipe('minecraft:acacia_boat') 
+        """
         for child in self.recipes:
             if smart_compare(child.identifier, identifier):
                 return child
-        raise AssetNotFoundError(identifier)
+        raise AssetNotFoundError(f"RecipeFile with identifier '{identifier}' could not be found.")
 
     def get_entity(self, identifier:str) -> EntityFileBP:
+        """
+        Gets a EntityFileBP by its identifier.
+
+        Example: bp.get_entity('reticulator:lion')
+        """
         for child in self.entities:
             if smart_compare(child.identifier, identifier):
                 return child
-        raise AssetNotFoundError(identifier)
+        raise AssetNotFoundError(f"EntityFileBP with identifier '{identifier}' could not be found.")
 
     def get_item(self, identifier:str) -> ItemFileBP:
-        for child in self.items:
-            if smart_compare(child.identifier, identifier):
-                return child
-        raise AssetNotFoundError(identifier)
+        """
+        Gets a ItemFileBP by its identifier.
+
+        Example: bp.get_item('reticulator:bronze_sword')
+        """
+        for item in self.items:
+            if smart_compare(item.identifier, identifier):
+                return item
+        raise AssetNotFoundError(f"ItemFileBP with identifier '{identifier}' could not be found.")
 
     def get_block(self, identifier:str) -> BlockFileBP:
-        for child in self.blocks:
-            if smart_compare(child.identifier, identifier):
-                return child
-        raise AssetNotFoundError(identifier)
+        """
+        Gets a BlockFileBP by its identifier.
 
-    
-    
+        Example: bp.get_block('reticulator:tin')
+        """
+        for block in self.blocks:
+            if smart_compare(block.identifier, identifier):
+                return block
+        raise AssetNotFoundError(f"BlockFileBP with identifier '{identifier}' could not be found.")
+ 
 class FeatureFileBP(JsonFileResource):
+    """
+    FeatureFileBP is a JsonFileResource which contains all information about a feature file.
+    """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        
-    
-    
-    
-    
-    
+
+    parent_folder = "features"
+
 class RecipeFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        
-    
+
+    parent_folder = "recipes"
+
     @property
     def identifier(self):
         return self.get_jsonpath("**/identifier")
@@ -1289,17 +1365,17 @@ class RecipeFile(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("**/identifier", identifier)
 
-    
-    
-    
-    
-class ParticleFileRP(JsonFileResource):
+class ParticleFile(JsonFileResource):
+    """
+    ParticleFileRP is a JsonFileResource which represents a particle file.
+    """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__components = []
-        self.__events = []
-        
-    
+        self.__components: JsonSubResource = []
+        self.__events: JsonSubResource = []
+
+    parent_folder = "particles"
+
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1316,7 +1392,6 @@ class ParticleFileRP(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("particle_effect/description/identifier", identifier)
 
-    
     @cached_property
     def components(self) -> list[JsonSubResource]:
         for path, data in self.get_data_at("particle_effect/components/*"):
@@ -1328,27 +1403,35 @@ class ParticleFileRP(JsonFileResource):
         for path, data in self.get_data_at("particle_effect/events/*"):
             self.__events.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__events
-    
-    
+
     def get_component(self, id:str) -> JsonSubResource:
-        for child in self.components:
-            if smart_compare(child.id, id):
-                return child
-        raise AssetNotFoundError(id)
+        """
+        Gets a specific JsonSubResource component from the particle.
+
+        Example: particle.get_component('minecraft:particle_motion_dynamic')
+        """
+        for component in self.components:
+            if smart_compare(component.id, id):
+                return component
+        raise AssetNotFoundError(f"Component called '{id}' could not be found on {self.identifier}.")
 
     def get_event(self, id:str) -> JsonSubResource:
-        for child in self.events:
-            if smart_compare(child.id, id):
-                return child
-        raise AssetNotFoundError(id)
+        """
+        Gets a specific JsonSubResource event from the particle.
 
-    
-    
+        Example: particle.get_event('my_event')
+        """
+        for event in self.events:
+            if smart_compare(event.id, id):
+                return event
+        raise AssetNotFoundError(f"Event called '{id}' could not be found on {self.identifier}.")
+
 class AttachableFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        
-    
+
+    parent_folder = "attachables"
+
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1365,15 +1448,12 @@ class AttachableFileRP(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:attachable/description/identifier", identifier)
 
-    
-    
-    
-    
-class FeatureRulesFileBP(JsonFileResource):
+class FeatureRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        
     
+    parent_folder = "feature_rules"
+
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:feature_rules/description/identifier")
@@ -1390,16 +1470,13 @@ class FeatureRulesFileBP(JsonFileResource):
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
-    
-    
-    
-    
-class RenderControllerFileRP(JsonFileResource):
+class RenderControllerFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__render_controllers = []
-        
     
+    parent_folder = "render_controllers"
+
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1410,53 +1487,81 @@ class RenderControllerFileRP(JsonFileResource):
 
     
     @cached_property
-    def render_controllers(self) -> list[RenderControllerRP]:
+    def render_controllers(self) -> list[RenderController]:
         for path, data in self.get_data_at("render_controllers/*"):
-            self.__render_controllers.append(RenderControllerRP(parent = self, json_path = path, data = data))
+            self.__render_controllers.append(RenderController(parent = self, json_path = path, data = data))
         return self.__render_controllers
     
     
-    def get_render_controller(self, id:str) -> RenderControllerRP:
+    def get_render_controller(self, id:str) -> RenderController:
         for child in self.render_controllers:
             if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
-    
-    
-class AnimationControllerFileRP(JsonFileResource):
+
+class AnimationControllerFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
-        
-    
+
+    parent_folder = "animation_controllers"
+
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
-    
+
     @format_version.setter
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
-    
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
         for path, data in self.get_data_at("animation_controllers/*"):
             self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
         return self.__animation_controllers
-    
-    
+
     def get_animation_controller(self, id:str) -> AnimationControllerRP:
         for child in self.animation_controllers:
             if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
 
-    
-    
+class AnimationControllerFileRP(JsonFileResource):
+    """
+    AnimationControllerFileRP
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        self.__animation_controllers = []
+
+    parent_folder = "animation_controllers"
+
+    @property
+    def format_version(self):
+        return self.get_jsonpath("format_version")
+
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", format_version)
+
+    @cached_property
+    def animation_controllers(self) -> list[AnimationControllerRP]:
+        for path, data in self.get_data_at("animation_controllers/*"):
+            self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
+        return self.__animation_controllers
+
+    def get_animation_controller(self, id:str) -> AnimationControllerRP:
+        for child in self.animation_controllers:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(id)
+
 class SpawnRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+
+    parent_folder = "spawn_rules"
 
     @property
     def identifier(self):
@@ -1479,6 +1584,8 @@ class LootTableFile(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__pools = []
 
+    parent_folder = "loot_tables"
+
     @cached_property
     def pools(self) -> list[LootTablePool]:
         for path, data in self.get_data_at("pools/*"):
@@ -1489,6 +1596,8 @@ class ItemFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
+
+    parent_folder = "items"
 
     @property
     def identifier(self):
@@ -1518,6 +1627,8 @@ class ItemFileBP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
 
+    parent_folder = "items"
+
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:item/description/identifier")
@@ -1536,6 +1647,8 @@ class BlockFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
+
+    parent_folder = "blocks"
 
     @property
     def identifier(self):
@@ -1559,6 +1672,8 @@ class EntityFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations: ShortnameResourceTriple = []
         self.__models: ShortnameResourceTriple = []
+
+    parent_folder = "entity"
 
     @property
     def identifier(self) -> str:
@@ -1628,6 +1743,8 @@ class AnimationFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations: AnimationRP = []
 
+    parent_folder = "animations"
+
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1648,8 +1765,9 @@ class EntityFileBP(JsonFileResource):
         self.__component_groups = []
         self.__components = []
         self.__events = []
-        
-    
+
+    parent_folder = "entities"
+
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1698,7 +1816,6 @@ class EntityFileBP(JsonFileResource):
                 return child
         raise AssetNotFoundError(id)
 
-    
     def create_component_group(self, name: str, data: dict) -> ComponentGroup:
         self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
         new_object = ComponentGroup(self, "minecraft:entity/component_groups/." + name, data)
@@ -1711,76 +1828,46 @@ class EntityFileBP(JsonFileResource):
         self.__components.append(new_object)
         return new_object
 
-    
-class ModelFileRP(JsonFileResource):
+class ModelFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__models = []
-        
-    
-    
+
+    parent_folder = "models"
+
     @cached_property
     def models(self) -> list[Model]:
         for path, data in self.get_data_at("minecraft:geometry/*"):
             self.__models.append(Model(parent = self, json_path = path, data = data))
         return self.__models
-    
-    
-    
-    
-class RenderControllerRP(JsonSubResource):
+
+class RenderController(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
-    
-    
-    
-    
-    
+
 class Cube(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
-    
-    
-    
-    
-    
-class LootTablePool(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
-    
-    
-    
-    
-    
+
 class AnimationControllerStateRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
-    
-    
-    
-    
-    
+
+class LootTablePool(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+
 class AnimationControllerRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__states = []
-        
-    
+
     @cached_property
     def states(self) -> list[AnimationControllerStateRP]:
         for path, data in self.get_data_at("states/*"):
             self.__states.append(AnimationControllerStateRP(parent = self, json_path = path, data = data))
         return self.__states
-    
     
     @property
     def initial_state(self):
@@ -1803,7 +1890,6 @@ class Model(JsonSubResource):
         
         self.__bones = []
         
-    
     @cached_property
     def bones(self) -> list[Bone]:
         for path, data in self.get_data_at("bones/*"):
@@ -1819,16 +1905,11 @@ class Model(JsonSubResource):
     def identifier(self, identifier):
         return self.set_jsonpath("description/identifier", identifier)
 
-    
-    
-    
 class AnimationRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
-        
         self.__bones = []
-        
-    
+
     @cached_property
     def bones(self) -> list[JsonSubResource]:
         for path, data in self.get_data_at("bones"):
@@ -1844,50 +1925,35 @@ class AnimationRP(JsonSubResource):
     def loop(self, loop):
         return self.set_jsonpath("loop", loop)
 
-    
-    
-    
 class ComponentGroup(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__components = []
-        
-    
+
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("*"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
-    
-    
-    
-    
+
     def create_component(self, name: str, data: dict) -> Component:
         self.set_jsonpath("" + name, data)
         new_object = Component(self, "." + name, data)
         self.__components.append(new_object)
         return new_object
 
-    
 class Component(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None , component_group: ComponentGroup = None) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        
-    
-    
-    
-    
-    
+
 class Event(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__groups_to_add = []
         self.__groups_to_remove = []
-        
-    
+
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
         for path, data in self.get_data_at("add/component_groups/*"):
@@ -1899,11 +1965,7 @@ class Event(JsonSubResource):
         for path, data in self.get_data_at("remove/component_groups/*"):
             self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_remove
-    
-    
-    
-    
-    
+
 class Bone(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
