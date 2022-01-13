@@ -37,12 +37,12 @@ class TestFunctions(unittest.TestCase):
     
     def test_getting_function(self):
         # Getting function by path can take multiple path formats
-        self.assertTrue(self.bp.get_function('functions\\kill_all_safe.mcfunction'))
-        self.assertTrue(self.bp.get_function('functions/teleport/home.mcfunction'))
+        self.assertTrue(self.bp.get_function('kill_all_safe.mcfunction'))
+        self.assertTrue(self.bp.get_function('teleport/home.mcfunction'))
 
     def test_non_existent_function(self):
         with self.assertRaises(AssetNotFoundError):
-            self.bp.get_function('functions/no_function.mcfunction')
+            self.bp.get_function('no_function.mcfunction')
 
     def test_editing_command(self):
         function = self.bp.functions[0]
@@ -76,7 +76,7 @@ class TestDirty(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
-        self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
+        self.function = self.bp.get_function('kill_all_safe.mcfunction')
         self.command = self.function.commands[0]
         self.component = self.entity.get_component('minecraft:type_family')
 
