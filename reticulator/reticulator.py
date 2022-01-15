@@ -13,6 +13,8 @@ import copy
 import dpath.util
 
 NO_ARGUMENT = object()
+TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
+SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
 
 def create_nested_directory(path: str):
     """
@@ -75,9 +77,14 @@ class AssetNotFoundError(ReticulatorException):
     example getting an entity by name
     """
 
+class InvalidJson(ReticulatorException):
+    """
+    Called when a JSON file is invalid.
+    """
+
 class AmbiguousAssetError(ReticulatorException):
     """
-    Called when a path is not unique
+    Called when a path is not unique.
     """
 
 class NotifyDict(dict):
@@ -790,7 +797,11 @@ class Pack():
         Loads json from file. `local_path` paramater is local to the projects
         input path.
         """
-        return self.get_json_from_path(os.path.join(self.input_path, local_path))
+        file_path = os.path.join(self.input_path, local_path)
+        if not os.path.exists(file_path):
+            raise AssetNotFoundError(f"File not found: {file_path}")
+        
+        return self.get_json_from_path(file_path)
 
     def save_json(self, local_path, data):
         """
@@ -851,8 +862,11 @@ class Pack():
     ## TODO: Move these static methods OUT
     @staticmethod
     def get_json_from_path(path:str) -> dict:
-        with open(path, "r", encoding='utf8') as fh:
-            return Pack.__get_json_from_file(fh)
+        try:
+            with open(path, "r", encoding='utf8') as fh:
+                return Pack.__get_json_from_file(fh)
+        except:
+            raise InvalidJson(path)
 
     @staticmethod
     def __get_json_from_file(fh:TextIOWrapper) -> dict:
@@ -934,7 +948,12 @@ class ResourcePack(Pack):
         self.__model_files: ModelFile = []
         self.__render_controller_files: RenderControllerFile = []
         self.__items: ItemFileRP = []
+        self.__sounds_file: SoundsFile = None
+        self.__sound_definitions_file: SoundDefinitionsFile = None
+        self.__sounds: list[str] = []
+        self.__textures: list[str] = []
 
+    # === Cached Properties ===
     @cached_property
     def particles(self) -> list[ParticleFile]:
         base_directory = os.path.join(self.input_path, "particles")
@@ -1039,6 +1058,84 @@ class ResourcePack(Pack):
                 children.append(child)
         return children
 
+    @cached_property
+    def sounds_file(self) -> SoundsFile:
+        file_path = os.path.join("sounds.json")
+        self.__sounds_file = SoundsFile(file_path = file_path, pack = self)
+        return self.__sounds_file
+
+    
+    @cached_property
+    def sound_definitions_file(self) -> SoundDefinitionsFile:
+        file_path = os.path.join("sounds", "sound_definitions.json")
+        self.__sound_definitions_file = SoundDefinitionsFile(file_path = file_path, pack = self)
+        return self.__sound_definitions_file
+
+    @cached_property
+    def sounds(self) -> list[str]:
+        """
+        Returns a list of all sounds in the pack, relative to the pack root.
+        """
+        glob_pattern = os.path.join(self.input_path, "sounds") + "/**/*."
+        for extension in SOUND_EXTENSIONS:
+            self.__sounds.extend(glob.glob(glob_pattern + extension, recursive=True))
+
+        self.__sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__sounds]
+        return self.__sounds
+
+    def get_sounds(self, search_path: str, trim_extension: bool = True) -> list[str]:
+        """
+        Returns a list of all child sounds of the searchpath, relative to the pack root. 
+        Search path should not include 'sounds'.
+
+        You may optionally trim the extension from the returned paths.
+
+        Example: rp.get_textures("entities", trim_extension=True)
+        """
+        sounds = []
+        glob_pattern = os.path.join(self.input_path, "sounds", search_path) + "/**/*."
+        for extension in SOUND_EXTENSIONS:
+            sounds.extend(glob.glob(glob_pattern + extension, recursive=True))
+
+        sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in sounds]
+        if trim_extension:
+            sounds = [os.path.splitext(path)[0] for path in sounds]
+        return sounds
+    
+    @cached_property
+    def textures(self) -> list[str]:
+        """
+        Returns a list of all textures in the pack, relative to the pack root.
+
+        Example: "textures/my_texture.png"
+        """
+        glob_pattern = os.path.join(self.input_path, "textures") + "/**/*."
+        for extension in TEXTURE_EXTENSIONS:
+            self.__textures.extend(glob.glob(glob_pattern + extension, recursive=True)) 
+
+        self.__textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__textures]
+        return self.__textures
+    
+    def get_textures(self, search_path: str, trim_extension: bool = True) -> list[str]:
+        """
+        Returns a list of all child textures of the searchpath, relative to the pack root. 
+        Search path should not include 'textures'.
+
+        You may optionally trim the extension from the returned paths.
+
+        Example: rp.get_textures("entities", trim_extension=True)
+        """
+        textures = []
+        glob_pattern = os.path.join(self.input_path, "textures", search_path) + "/**/*."
+        for extension in TEXTURE_EXTENSIONS:
+            textures.extend(glob.glob(glob_pattern + extension, recursive=True))
+
+        textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in textures]
+        if trim_extension:
+            textures = [os.path.splitext(path)[0] for path in textures]
+        return textures
+
+    # === Getters ===
     def get_particle(self, identifier:str) -> ParticleFile:
         for child in self.particles:
             if smart_compare(child.identifier, identifier):
@@ -1367,7 +1464,7 @@ class RecipeFile(JsonFileResource):
 
 class ParticleFile(JsonFileResource):
     """
-    ParticleFileRP is a JsonFileResource which represents a particle file.
+    ParticleFile is a JsonFileResource which represents a particle file.
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -1591,6 +1688,29 @@ class LootTableFile(JsonFileResource):
         for path, data in self.get_data_at("pools/*"):
             self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
+
+class SoundDefinitionsFile(JsonFileResource):
+    """
+    SoundsDefinitionFile is a class which represents the data stored in 
+    'rp/sounds/sound_definitions.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data, file_path, pack)
+    
+    @property
+    def format_version(self):
+        return self.get_jsonpath("format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", format_version)
+
+class SoundsFile(JsonFileResource):
+    """
+    SoundsFile is a class which represents the data stored in 'rp/sounds.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
 
 class ItemFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:

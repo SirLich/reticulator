@@ -15,6 +15,40 @@ def create_output_directory():
 def clean_up_output_directory():
     os.remove('test_output')
 
+class TestSounds(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+    
+    def test_sounds(self):
+        self.assertEqual(len(self.rp.sounds), 2)
+        self.assertEqual(self.rp.sounds[0], 'sounds/bottle/fill_dragonbreath1.fsb')
+    
+    def test_sounds_file(self):
+        with self.assertRaises(AssetNotFoundError):
+            self.rp.sounds_file
+        
+    def test_sound_definitions_file(self):
+        self.assertEqual(self.rp.sound_definitions_file.format_version, '1.10.0')
+
+class TestTextures(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_textures(self):
+        self.assertEqual(len(self.rp.textures), 5)
+
+    def test_texture_paths(self):
+        self.assertEqual(self.rp.textures[0], 'textures/blocks/ancient_debris_top.png')
+
+    def test_get_textures(self):
+        self.assertEqual(len(self.rp.get_textures('entity')), 2)
+        self.assertEqual(len(self.rp.get_textures('dne')), 0)
+        self.assertEqual(len(self.rp.get_textures('')), 5)
+
+    def test_get_textures_trim(self):
+        self.assertEqual(self.rp.get_textures('entity', trim_extension=False)[0], 'textures/entity/alex.png')
+        self.assertEqual(self.rp.get_textures('entity', trim_extension=True)[0], 'textures/entity/alex')
+            
 class TestFunctions(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
