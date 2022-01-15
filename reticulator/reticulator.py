@@ -578,6 +578,21 @@ class JsonSubResource(JsonResource):
         self.parent.dirty = True
         self.parent.delete_jsonpath(self.json_path)
 
+class ShortnamePathDouble(Resource):
+    """
+    See ShortnameResourceTriple for more information.
+    """
+    def __init__(self, shortname: str, file_path: str, file: FileResource = None, pack: Pack = None) -> None:
+        super().__init__(file=file, pack=pack)
+
+        # The key which is used to identify the resource within this context. 
+        # For example 'move' is the shortname for  the 'animation.dog.move' resource.
+        self.shortname: str = shortname
+
+        # The ID is the identifier for the resource, which is used to get the resource
+        # from the pack. For example 'animation.dog.move' is the id for the 'move' resource.
+        self.file_path: str = file_path
+
 class ShortnameResourceTriple(Resource):
     """
     A str:Resource pair, which is used to store assets by their shortname.
@@ -586,7 +601,7 @@ class ShortnameResourceTriple(Resource):
     with an identifier, which can be converted into a resource
     """
     def __init__(self, shortname: str, id: str, resource: Resource, file: FileResource = None, pack: Pack = None) -> None:
-        super().__init__(file=FileResource, pack=pack)
+        super().__init__(file=file, pack=pack)
 
         # The key which is used to identify the resource within this context. 
         # For example 'move' is the shortname for  the 'animation.dog.move' resource.
@@ -948,10 +963,16 @@ class ResourcePack(Pack):
         self.__model_files: ModelFile = []
         self.__render_controller_files: RenderControllerFile = []
         self.__items: ItemFileRP = []
-        self.__sounds_file: SoundsFile = None
-        self.__sound_definitions_file: SoundDefinitionsFile = None
         self.__sounds: list[str] = []
         self.__textures: list[str] = []
+
+        self.__sounds_file: SoundsFile = None
+        self.__sound_definitions_file: SoundDefinitionsFile = None
+        self.__terrain_texture_file: TerrainTextureFile = None
+        self.__item_texture_file: ItemTextureFile = None
+        self.__flipbook_textures_file: FlipbookTexturesFile = None
+        self.__blocks_file: BlocksFile = None
+        self.__biomes_client_file: BiomesClientFile = None
 
     # === Cached Properties ===
     @cached_property
@@ -1059,19 +1080,6 @@ class ResourcePack(Pack):
         return children
 
     @cached_property
-    def sounds_file(self) -> SoundsFile:
-        file_path = os.path.join("sounds.json")
-        self.__sounds_file = SoundsFile(file_path = file_path, pack = self)
-        return self.__sounds_file
-
-    
-    @cached_property
-    def sound_definitions_file(self) -> SoundDefinitionsFile:
-        file_path = os.path.join("sounds", "sound_definitions.json")
-        self.__sound_definitions_file = SoundDefinitionsFile(file_path = file_path, pack = self)
-        return self.__sound_definitions_file
-
-    @cached_property
     def sounds(self) -> list[str]:
         """
         Returns a list of all sounds in the pack, relative to the pack root.
@@ -1134,6 +1142,49 @@ class ResourcePack(Pack):
         if trim_extension:
             textures = [os.path.splitext(path)[0] for path in textures]
         return textures
+
+    # === Individual Files ===
+    @cached_property
+    def sounds_file(self) -> SoundsFile:
+        file_path = "sounds.json"
+        self.__sounds_file = SoundsFile(file_path = file_path, pack = self)
+        return self.__sounds_file
+
+    @cached_property
+    def sound_definitions_file(self) -> SoundDefinitionsFile:
+        file_path = os.path.join("sounds", "sound_definitions.json")
+        self.__sound_definitions_file = SoundDefinitionsFile(file_path = file_path, pack = self)
+        return self.__sound_definitions_file
+
+    @cached_property
+    def terrain_texture_file(self) -> TerrainTextureFile:
+        file_path = os.path.join("textures", "terrain_texture.json")
+        self.__terrain_texture_file = TerrainTextureFile(file_path = file_path, pack = self)
+        return self.__terrain_texture_file
+
+    @cached_property
+    def item_texture_file(self) -> ItemTextureFile:
+        file_path = os.path.join("textures", "item_texture.json")
+        self.__item_texture_file = ItemTextureFile(file_path = file_path, pack = self)
+        return self.__item_texture_file
+
+    @cached_property
+    def flipbook_textures_file(self) -> FlipbookTexturesFile:
+        file_path = os.path.join("textures", "flipbook_textures.json")
+        self.__flipbook_textures_file = FlipbookTexturesFile(file_path = file_path, pack = self)
+        return self.__flipbook_textures_file
+
+    @cached_property
+    def blocks_file(self) -> BlocksFile:
+        file_path = "blocks.json"
+        self.__blocks_file = BlocksFile(file_path = file_path, pack = self)
+        return self.__blocks_file
+
+    @cached_property
+    def biomes_client_file(self) -> BiomesClientFile:
+        file_path = "biomes_client.json"
+        self.__biomes_client_file = BiomesClientFile(file_path = file_path, pack = self)
+        return self.__biomes_client_file
 
     # === Getters ===
     def get_particle(self, identifier:str) -> ParticleFile:
@@ -1705,6 +1756,41 @@ class SoundDefinitionsFile(JsonFileResource):
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
+class BlocksFile(JsonFileResource):
+    """
+    BlocksFile is a class which represents the data stored in 'rp/blocks.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+
+class FlipbookTexturesFile(JsonFileResource):
+    """
+    FlipbookTexturesFile is a class which represents the data stored in 'rp/textures/flipbook_textures.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+
+class BiomesClientFile(JsonFileResource):
+    """
+    BiomesClientFile is a class which represents the data stored in 'rp/biomes_client.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+
+class ItemTextureFile(JsonFileResource):
+    """
+    ItemTextureFile is a class which represents the data stored in 'rp/textures/item_texture.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+
+class TerrainTextureFile(JsonFileResource):
+    """
+    TerrainTextureFile is a class which represents the data stored in 'rp/textures/terrain_texture.json'
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+
 class SoundsFile(JsonFileResource):
     """
     SoundsFile is a class which represents the data stored in 'rp/sounds.json'
@@ -1792,6 +1878,7 @@ class EntityFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations: ShortnameResourceTriple = []
         self.__models: ShortnameResourceTriple = []
+        self.__textures: ShortnamePathDouble = []
 
     parent_folder = "entity"
 
@@ -1805,10 +1892,7 @@ class EntityFileRP(JsonFileResource):
 
     @property
     def counterpart(self) -> EntityFileBP:
-        try:
-            return self.pack.project.behavior_pack.get_entity(self.identifier)
-        except ReticulatorException:
-            return None
+        return self.pack.project.behavior_pack.get_entity(self.identifier)
 
     @cached_property
     def animations(self) -> list[ShortnameResourceTriple]:
@@ -1819,10 +1903,7 @@ class EntityFileRP(JsonFileResource):
         """
         data = self.get_jsonpath("minecraft:client_entity/description/animations")
         for shortname, animation_id in data.items():
-            try:
-                animation = self.pack.get_animation(animation_id)
-            except AssetNotFoundError:
-                animation = None
+            animation = self.pack.get_animation(animation_id)
 
             self.__animations.append(
                 ShortnameResourceTriple(
@@ -1833,15 +1914,29 @@ class EntityFileRP(JsonFileResource):
             )
 
         return self.__animations
+    
+    @cached_property
+    def textures(self) -> list[ShortnamePathDouble]:
+        """
+        The textures of the entity, as a list of ShortnamePathDouble objects.
+        Using this structure, you can get the textures's shortname, and path.
+        """
+        data = self.get_jsonpath("minecraft:client_entity/description/textures")
+        for shortname, texture_path in data.items():
+            self.__animations.append(
+                ShortnamePathDouble(
+                    shortname,
+                    texture_path
+                )
+            )
+
+        return self.__animations
 
     @cached_property
     def models(self) -> list[ShortnameResourceTriple]:
         data = self.get_jsonpath("minecraft:client_entity/description/geometry")
         for shortname, geometry_id in data.items():
-            try:
-                geometry = self.pack.get_model(geometry_id)
-            except AssetNotFoundError:
-                geometry = None
+            geometry = self.pack.get_model(geometry_id)
 
             self.__models.append(
                 ShortnameResourceTriple(
@@ -1904,7 +1999,10 @@ class EntityFileBP(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:entity/description/identifier", identifier)
 
-    
+    @property
+    def counterpart(self) -> EntityFileRP:
+        return self.pack.project.resource_pack.get_entity(self.identifier)
+
     @cached_property
     def component_groups(self) -> list[ComponentGroup]:
         for path, data in self.get_data_at("minecraft:entity/component_groups/*"):
