@@ -5,7 +5,7 @@
  <!-- - Run `generator.py`  -->
  - Set version in `setup.py`
  - Commit and push everything
- - Tag the repository: `git tag -a v0.0.9-beta`
+ - Tag the repository: `git tag -a v0.0.13-beta`
  - Push git tags: `git push --tags`
  - Make new release on github, using the website
  - Create distribution `python setup.py sdist`
