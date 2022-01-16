@@ -16,11 +16,13 @@ NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
 
+
 def create_nested_directory(path: str):
     """
     Creates a nested directory structure if it doesn't exist.
     """
     Path(path).parent.mkdir(parents=True, exist_ok=True)
+
 
 def freeze(o):
     """
@@ -35,6 +37,7 @@ def freeze(o):
 
     return hash(o)
 
+
 def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
     """
     Converts a dict or list to a notify structure.
@@ -46,6 +49,7 @@ def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Un
         return NotifyList(data, owner=parent)
 
     return data
+
 
 def smart_compare(a, b) -> bool:
     """
@@ -60,10 +64,12 @@ def smart_compare(a, b) -> bool:
     except Exception:
         return a == b
 
+
 class ReticulatorException(Exception):
     """
     Base class for Reticulator exceptions.
     """
+
 
 class FloatingAssetError(ReticulatorException):
     """
@@ -71,21 +77,25 @@ class FloatingAssetError(ReticulatorException):
     example when saving
     """
 
+
 class AssetNotFoundError(ReticulatorException):
     """
     Called when attempting to access an asset that does not exist, for
     example getting an entity by name
     """
 
+
 class InvalidJson(ReticulatorException):
     """
     Called when a JSON file is invalid.
     """
 
+
 class AmbiguousAssetError(ReticulatorException):
     """
     Called when a path is not unique.
     """
+
 
 class NotifyDict(dict):
     """
@@ -119,6 +129,7 @@ class NotifyDict(dict):
                 self._owner.dirty = True
 
         super().__setitem__(attr, value)
+
 
 class NotifyList(list):
     """
@@ -163,6 +174,7 @@ class NotifyList(list):
                 self._owner.dirty = True
         
         super().__setitem__(attr, value)
+
 
 class Resource():
     """
@@ -275,6 +287,7 @@ class Resource():
 
             # TODO Do we need to call save here?
 
+
 class FileResource(Resource):
     """
     A resource, which is also a file.
@@ -331,6 +344,7 @@ class FileResource(Resource):
 
     def _save(self):
         raise NotImplementedError("This file has not implemented a save method.")
+
 
 class JsonResource(Resource):
     """
@@ -425,16 +439,22 @@ class JsonResource(Resource):
                 f"Path {json_path} does not exist."
             ) from exception
 
-    # TODO: Rewrite this to not suck
-    # Gets a list of values found at this jsonpath location
-    def get_data_at(self, json_path):
-        try:
-            # Get Data at has a special syntax, to make it clear you are getting a list
-            if not json_path.endswith("*"):
-                raise AmbiguousAssetError('Data get must end with *', json_path)
-            json_path = json_path[:-2]
 
-            result = self.get_jsonpath(json_path, default=[])
+    def get_data_at(self, json_path):
+        """
+        Returns a list of jsonpaths found at this jsonpath location.
+        For a list, this will return: json_path + list index
+        For a dict, this will return json_path + dict key
+
+        Exception will be raised if the result is not a list or dict.
+        Missing data path will return []
+        """
+        try:
+            # Special case, to handle the root of the json
+            if json_path == "**":
+                result = self.data
+            else:
+                result = self.get_jsonpath(json_path, default=[])
 
             if isinstance(result, dict):
                 for key in result.keys():
@@ -443,10 +463,11 @@ class JsonResource(Resource):
                 for i, element in enumerate(result):
                     yield json_path + f"/[{i}]", element
             else:
-                raise AmbiguousAssetError('get_data_at found a single element, not a list or dict.', json_path)
+                raise AmbiguousAssetError(f"Path '{json_path}' matched a single element, not a list or dict.")
 
         except KeyError as key_error:
             raise AssetNotFoundError(json_path, self.data) from key_error
+
 
 class JsonFileResource(FileResource, JsonResource):
     """
@@ -479,6 +500,7 @@ class JsonFileResource(FileResource, JsonResource):
 
     def _create_hash(self):
         return freeze(self.data)
+
 
 class JsonSubResource(JsonResource):
     """
@@ -521,6 +543,7 @@ class JsonSubResource(JsonResource):
         self.dirty = True
         self._id = id
 
+
     # TODO This feels wrong?
     def get_id_from_jsonpath(self, json_path):
         return json_path.split("/")[-1]
@@ -543,6 +566,7 @@ class JsonSubResource(JsonResource):
         Returns True if this resource has been modified since it was last saved.
         """
         return self._dirty
+
 
     @dirty.setter
     def dirty(self, dirty):
@@ -578,6 +602,7 @@ class JsonSubResource(JsonResource):
         self.parent.dirty = True
         self.parent.delete_jsonpath(self.json_path)
 
+
 class ShortnamePathDouble(Resource):
     """
     See ShortnameResourceTriple for more information.
@@ -592,6 +617,23 @@ class ShortnamePathDouble(Resource):
         # The ID is the identifier for the resource, which is used to get the resource
         # from the pack. For example 'animation.dog.move' is the id for the 'move' resource.
         self.file_path: str = file_path
+
+    # TODO rewrite everything bellow this line in this class
+    def exists(self) -> bool:
+        """
+        Returns True if this resource exists in the pack.
+        """
+        return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
+
+    def _save(self):
+        self.pack.save_json(self.file_path, self.data)
+
+    def _delete(self):
+        self._mark_for_deletion = True
+
+    def _create_hash(self):
+        return freeze(self.data)
+
 
 class ShortnameResourceTriple(Resource):
     """
@@ -622,6 +664,7 @@ class ShortnameResourceTriple(Resource):
         """
         return self.resource is not None
 
+
 @dataclass
 class Translation:
     """
@@ -631,6 +674,7 @@ class Translation:
     key: str
     value: str
     comment: str
+
 
 class Command(Resource):
     """
@@ -677,6 +721,7 @@ class Command(Resource):
     def __repr__(self):
         return f"Function: '{self.data}'"
 
+
 class FunctionFile(FileResource):
     """
     A FunctionFile is a function file, such as run.mcfunction, and is
@@ -715,6 +760,7 @@ class FunctionFile(FileResource):
         with open(path, 'w', encoding='utf-8') as file:
             for command in self.commands:
                 file.write(command.data + '\n')
+
 
 class LanguageFile(FileResource):
     """
@@ -765,6 +811,7 @@ class LanguageFile(FileResource):
         with open(path, 'w', encoding='utf-8') as file:
             for translation in self.translations:
                 file.write(f"{translation.key}={translation.value}\t##{translation.comment}\n")
+
 
     @cached_property
     def translations(self) -> list[Translation]:
@@ -905,7 +952,6 @@ class Pack():
                     contents = pre_comment + post_comment.split("*/", 1)[1]
                 return json.loads(contents)
             except json.JSONDecodeError as exception:
-                print(exception)
                 return {}
 
     @staticmethod
@@ -917,6 +963,7 @@ class Pack():
 
         with open(file_path, "w+") as file_head:
             return json.dump(data, file_head, indent=2, ensure_ascii=False)
+
 
 class Project():
     """
@@ -951,6 +998,7 @@ class Project():
         """
         self.__behavior_pack.save(force=force)
         self.__resource_pack.save(force=force)
+
 
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
@@ -1307,7 +1355,7 @@ class ResourcePack(Pack):
                     return child
         raise AssetNotFoundError(identifier)
 
-    
+
 class BehaviorPack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
@@ -1321,6 +1369,7 @@ class BehaviorPack(Pack):
         self.__loot_tables: LootTableFile = []
         self.__items: ItemFileBP = []
         self.__blocks: BlockFileBP = []
+        # self.function_tick_file: FunctionTickFile = []
 
     @cached_property
     def functions(self) -> list[FunctionFile]:
@@ -1446,6 +1495,18 @@ class BehaviorPack(Pack):
                 return child
         raise AssetNotFoundError(f"SpawnRuleFile with identifier '{identifier}' could not be found.")
 
+    def get_loot_table(self, file_path:str) -> LootTableFile:
+        """
+        Gets a LootTableFile by its filepath.
+
+        Example: bp.get_loot_table('entities/boat.json') 
+        """
+        for child in self.recipes:
+            path_to_try = os.path.join(LootTableFile.parent_folder, file_path)
+            if smart_compare(child.file_path, file_path):
+                return child
+        raise AssetNotFoundError(f"LootTableFile with file_path '{file_path}' could not be found.")
+
     def get_recipe(self, identifier:str) -> RecipeFile:
         """
         Gets a RecipeFile by its identifier.
@@ -1489,7 +1550,8 @@ class BehaviorPack(Pack):
             if smart_compare(block.identifier, identifier):
                 return block
         raise AssetNotFoundError(f"BlockFileBP with identifier '{identifier}' could not be found.")
- 
+
+
 class FeatureFileBP(JsonFileResource):
     """
     FeatureFileBP is a JsonFileResource which contains all information about a feature file.
@@ -1498,6 +1560,7 @@ class FeatureFileBP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
 
     parent_folder = "features"
+
 
 class RecipeFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1542,13 +1605,13 @@ class ParticleFile(JsonFileResource):
 
     @cached_property
     def components(self) -> list[JsonSubResource]:
-        for path, data in self.get_data_at("particle_effect/components/*"):
+        for path, data in self.get_data_at("particle_effect/components"):
             self.__components.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__components
     
     @cached_property
     def events(self) -> list[JsonSubResource]:
-        for path, data in self.get_data_at("particle_effect/events/*"):
+        for path, data in self.get_data_at("particle_effect/events"):
             self.__events.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__events
 
@@ -1574,6 +1637,7 @@ class ParticleFile(JsonFileResource):
                 return event
         raise AssetNotFoundError(f"Event called '{id}' could not be found on {self.identifier}.")
 
+
 class AttachableFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -1595,6 +1659,7 @@ class AttachableFileRP(JsonFileResource):
     @identifier.setter
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:attachable/description/identifier", identifier)
+
 
 class FeatureRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1618,6 +1683,7 @@ class FeatureRuleFile(JsonFileResource):
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
+
 class RenderControllerFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -1636,7 +1702,7 @@ class RenderControllerFile(JsonFileResource):
     
     @cached_property
     def render_controllers(self) -> list[RenderController]:
-        for path, data in self.get_data_at("render_controllers/*"):
+        for path, data in self.get_data_at("render_controllers"):
             self.__render_controllers.append(RenderController(parent = self, json_path = path, data = data))
         return self.__render_controllers
     
@@ -1665,7 +1731,7 @@ class AnimationControllerFileBP(JsonFileResource):
 
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
-        for path, data in self.get_data_at("animation_controllers/*"):
+        for path, data in self.get_data_at("animation_controllers"):
             self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
         return self.__animation_controllers
 
@@ -1674,6 +1740,7 @@ class AnimationControllerFileBP(JsonFileResource):
             if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
+
 
 class AnimationControllerFileRP(JsonFileResource):
     """
@@ -1695,7 +1762,7 @@ class AnimationControllerFileRP(JsonFileResource):
 
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
-        for path, data in self.get_data_at("animation_controllers/*"):
+        for path, data in self.get_data_at("animation_controllers"):
             self.__animation_controllers.append(AnimationControllerRP(parent = self, json_path = path, data = data))
         return self.__animation_controllers
 
@@ -1704,6 +1771,7 @@ class AnimationControllerFileRP(JsonFileResource):
             if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
+
 
 class SpawnRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1736,9 +1804,10 @@ class LootTableFile(JsonFileResource):
 
     @cached_property
     def pools(self) -> list[LootTablePool]:
-        for path, data in self.get_data_at("pools/*"):
+        for path, data in self.get_data_at("pools"):
             self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
+
 
 class SoundDefinitionsFile(JsonFileResource):
     """
@@ -1756,12 +1825,14 @@ class SoundDefinitionsFile(JsonFileResource):
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
+
 class BlocksFile(JsonFileResource):
     """
     BlocksFile is a class which represents the data stored in 'rp/blocks.json'
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+
 
 class FlipbookTexturesFile(JsonFileResource):
     """
@@ -1770,12 +1841,14 @@ class FlipbookTexturesFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
+
 class BiomesClientFile(JsonFileResource):
     """
     BiomesClientFile is a class which represents the data stored in 'rp/biomes_client.json'
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+
 
 class ItemTextureFile(JsonFileResource):
     """
@@ -1784,6 +1857,7 @@ class ItemTextureFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
+
 class TerrainTextureFile(JsonFileResource):
     """
     TerrainTextureFile is a class which represents the data stored in 'rp/textures/terrain_texture.json'
@@ -1791,12 +1865,14 @@ class TerrainTextureFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
+
 class SoundsFile(JsonFileResource):
     """
     SoundsFile is a class which represents the data stored in 'rp/sounds.json'
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+
 
 class ItemFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1824,9 +1900,10 @@ class ItemFileRP(JsonFileResource):
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("minecraft:item/components/*"):
+        for path, data in self.get_data_at("minecraft:item/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
+
 
 class ItemFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1849,6 +1926,11 @@ class ItemFileBP(JsonFileResource):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
 
+# class FunctionTickFile(FileResource):
+#     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+#         super().__init__(data = data, file_path = file_path, pack = pack)
+#         self.functions = []
+
 class BlockFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -1869,6 +1951,7 @@ class BlockFileBP(JsonFileResource):
         for path, data in self.get_data_at("minecraft:block/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
+
 
 class EntityFileRP(JsonFileResource):
     """
@@ -1903,7 +1986,12 @@ class EntityFileRP(JsonFileResource):
         """
         data = self.get_jsonpath("minecraft:client_entity/description/animations")
         for shortname, animation_id in data.items():
-            animation = self.pack.get_animation(animation_id)
+            # It may be desirable to have the animation's identifier as a string,
+            # even if the resource cannot be loaded.
+            try:
+                animation = self.pack.get_animation(animation_id)
+            except AssetNotFoundError:
+                animation = None
 
             self.__animations.append(
                 ShortnameResourceTriple(
@@ -1923,14 +2011,14 @@ class EntityFileRP(JsonFileResource):
         """
         data = self.get_jsonpath("minecraft:client_entity/description/textures")
         for shortname, texture_path in data.items():
-            self.__animations.append(
+            self.__textures.append(
                 ShortnamePathDouble(
                     shortname,
                     texture_path
                 )
             )
 
-        return self.__animations
+        return self.__textures
 
     @cached_property
     def models(self) -> list[ShortnameResourceTriple]:
@@ -1947,6 +2035,7 @@ class EntityFileRP(JsonFileResource):
             )
 
         return self.__models
+
 
 class AnimationFileRP(JsonFileResource):
     """
@@ -1970,9 +2059,10 @@ class AnimationFileRP(JsonFileResource):
 
     @cached_property
     def animations(self) -> list[AnimationRP]:
-        for path, data in self.get_data_at("animations/*"):
+        for path, data in self.get_data_at("animations"):
             self.__animations.append(AnimationRP(parent = self, json_path = path, data = data))
         return self.__animations
+
 
 class EntityFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -2005,19 +2095,19 @@ class EntityFileBP(JsonFileResource):
 
     @cached_property
     def component_groups(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("minecraft:entity/component_groups/*"):
+        for path, data in self.get_data_at("minecraft:entity/component_groups"):
             self.__component_groups.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__component_groups
     
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("minecraft:entity/components/*"):
+        for path, data in self.get_data_at("minecraft:entity/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
     
     @cached_property
     def events(self) -> list[Event]:
-        for path, data in self.get_data_at("minecraft:entity/events/*"):
+        for path, data in self.get_data_at("minecraft:entity/events"):
             self.__events.append(Event(parent = self, json_path = path, data = data))
         return self.__events
     
@@ -2046,6 +2136,7 @@ class EntityFileBP(JsonFileResource):
         self.__components.append(new_object)
         return new_object
 
+
 class ModelFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -2055,25 +2146,30 @@ class ModelFile(JsonFileResource):
 
     @cached_property
     def models(self) -> list[Model]:
-        for path, data in self.get_data_at("minecraft:geometry/*"):
+        for path, data in self.get_data_at("minecraft:geometry"):
             self.__models.append(Model(parent = self, json_path = path, data = data))
         return self.__models
+
 
 class RenderController(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
+
 class Cube(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
+
 
 class AnimationControllerStateRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
+
 class LootTablePool(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
+
 
 class AnimationControllerRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
@@ -2083,7 +2179,7 @@ class AnimationControllerRP(JsonSubResource):
 
     @cached_property
     def states(self) -> list[AnimationControllerStateRP]:
-        for path, data in self.get_data_at("states/*"):
+        for path, data in self.get_data_at("states"):
             self.__states.append(AnimationControllerStateRP(parent = self, json_path = path, data = data))
         return self.__states
     
@@ -2110,7 +2206,7 @@ class Model(JsonSubResource):
         
     @cached_property
     def bones(self) -> list[Bone]:
-        for path, data in self.get_data_at("bones/*"):
+        for path, data in self.get_data_at("bones"):
             self.__bones.append(Bone(parent = self, json_path = path, data = data))
         return self.__bones
     
@@ -2122,6 +2218,7 @@ class Model(JsonSubResource):
     @identifier.setter
     def identifier(self, identifier):
         return self.set_jsonpath("description/identifier", identifier)
+
 
 class AnimationRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
@@ -2143,17 +2240,30 @@ class AnimationRP(JsonSubResource):
     def loop(self, loop):
         return self.set_jsonpath("loop", loop)
 
+
 class ComponentGroup(JsonSubResource):
+    """
+    A component group is a collection of components in an EntityFileBP.
+    """
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        self.__components = []
+        self.__components: Component = []
 
     @cached_property
     def components(self) -> list[Component]:
-        for path, data in self.get_data_at("*"):
+        for path, data in self.get_data_at("**"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
+
+    def get_component(self, id:str) -> JsonSubResource:
+        """
+        Gets a component from this group, by its ID.
+        """
+        for component in self.components:
+            print("BOB")
+            if smart_compare(component.id, id):
+                return component
+        raise AssetNotFoundError(f"Component called '{id}' could not be found in group '{self.id}'.")
 
     def create_component(self, name: str, data: dict) -> Component:
         self.set_jsonpath("" + name, data)
@@ -2161,9 +2271,11 @@ class ComponentGroup(JsonSubResource):
         self.__components.append(new_object)
         return new_object
 
+
 class Component(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None , component_group: ComponentGroup = None) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
+
 
 class Event(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
@@ -2174,15 +2286,16 @@ class Event(JsonSubResource):
 
     @cached_property
     def groups_to_add(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("add/component_groups/*"):
+        for path, data in self.get_data_at("add/component_groups"):
             self.__groups_to_add.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_add
     
     @cached_property
     def groups_to_remove(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("remove/component_groups/*"):
+        for path, data in self.get_data_at("remove/component_groups"):
             self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
         return self.__groups_to_remove
+
 
 class Bone(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
@@ -2193,6 +2306,6 @@ class Bone(JsonSubResource):
     
     @cached_property
     def cubes(self) -> list[Cube]:
-        for path, data in self.get_data_at("cubes/*"):
+        for path, data in self.get_data_at("cubes"):
             self.__cubes.append(Cube(parent = self, json_path = path, data = data))
         return self.__cubes

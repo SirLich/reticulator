@@ -15,6 +15,25 @@ def create_output_directory():
 def clean_up_output_directory():
     os.remove('test_output')
 
+class TestLootTables(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_loot_table(self):
+        self.assertEqual(len(self.bp.loot_tables), 2)
+        self.assertEqual(self.bp.loot_tables[0].file_name, 'dolphin.json')
+    
+    def test_pools(self):
+        self.assertEqual(len(self.bp.loot_tables[0].pools), 1)
+
+    @unittest.skip("Not implemented yet")
+    def test_loot_from_entity(self):
+        dolphin = self.bp.get_entity('minecraft:dolphin')
+        group = dolphin.get_component_group('dolphin_adult')
+        component = group.get_component('minecraft:loot')
+        table_name = component.data['table']
+        loot_table = self.bp.get_loot_table(table_name)
+
 class TestSounds(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -235,6 +254,17 @@ class TestShortnameResourceTriple(unittest.TestCase):
         self.assertEqual(animation.id, 'animation.guardian.missing')
         self.assertEqual(animation.resource, None)
         self.assertEqual(animation.exists(), False)
+
+class TestEntityFileBP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.entity = self.bp.get_entity('minecraft:dolphin')
+
+    def test_component_groups(self):
+        self.assertEqual(len(self.entity.component_groups), 7)
+        group = self.entity.get_component_group('dolphin_adult')
+        self.assertEqual(group.id, 'dolphin_adult')
+        self.assertEqual(len(group.components), 4)
 
 
 class TestEntityFileRP(unittest.TestCase):

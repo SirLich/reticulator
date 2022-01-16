@@ -1,6 +1,5 @@
 # 0.0.14-beta
  - Added EntityFileRP.textures
- - EntityFileRP.models and EntityFileRP.animations now throw AssetNotFound error
  - EntityFileRP.counterpart now throws exceptions
  - Added EntityFileBP.counterpart
  - Added support for 'terrain_texture.json'
@@ -8,3 +7,7 @@
  - Added support for 'flipbook_textures.json
  - Added support for 'biomes_client.json'
  - Added support for 'blocks.json'
+ - get_data_at no longer takes '/*' at the end
+ - Added special handling for '**' to query the root of a json, in get_data_at
+ - Fixed entity component/component group handling
+ - Added get_loot_table
