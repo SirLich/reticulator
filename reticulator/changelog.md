@@ -1,6 +1,7 @@
 # 0.0.14-beta
  - Added EntityFileRP.textures
- - EntityFileRP.counterpart now throws exceptions
+ - EntityFileRP.counterpart now throws AssetNotFoundException in instead of returning None
+ - Added InvalidJsonError exception
  - Added EntityFileBP.counterpart
  - Added support for 'terrain_texture.json'
  - Added support for 'item_texture.json'
@@ -11,3 +12,8 @@
  - Added special handling for '**' to query the root of a json, in get_data_at
  - Fixed entity component/component group handling
  - Added get_loot_table
+ - All file asset getters are once again relative to the root of the pack
+ - Fixed bp.get_loot_table
+ - Added ItemFileRP.get_component
+ - Added BlockFileBP.get_component
+ - Added ItemFileBP.get_component

@@ -15,6 +15,26 @@ def create_output_directory():
 def clean_up_output_directory():
     os.remove('test_output')
 
+class TestRenderControllers(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_render_controller_file(self):
+        self.assertEqual(len(self.rp.render_controller_files), 1)
+
+    def test_render_controller(self):
+        self.assertEqual(len(self.rp.render_controllers), 2)
+
+    def test_get_render_controller(self):
+        self.rp.get_render_controller('controller.render.dolphin')
+
+    def test_get_render_controller_file(self):
+        self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
+    
+    def test_internals(self):
+        self.assertEqual(self.rp.get_render_controller('controller.render.dolphin').file.format_version, '1.8.0')
+
+
 class TestLootTables(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -26,13 +46,13 @@ class TestLootTables(unittest.TestCase):
     def test_pools(self):
         self.assertEqual(len(self.bp.loot_tables[0].pools), 1)
 
-    @unittest.skip("Not implemented yet")
     def test_loot_from_entity(self):
         dolphin = self.bp.get_entity('minecraft:dolphin')
         group = dolphin.get_component_group('dolphin_adult')
         component = group.get_component('minecraft:loot')
         table_name = component.data['table']
         loot_table = self.bp.get_loot_table(table_name)
+        self.assertEqual(len(loot_table.pools), 1)
 
 class TestSounds(unittest.TestCase):
     def setUp(self) -> None:
@@ -90,12 +110,12 @@ class TestFunctions(unittest.TestCase):
     
     def test_getting_function(self):
         # Getting function by path can take multiple path formats
-        self.assertTrue(self.bp.get_function('kill_all_safe.mcfunction'))
-        self.assertTrue(self.bp.get_function('teleport/home.mcfunction'))
+        self.assertTrue(self.bp.get_function('functions/kill_all_safe.mcfunction'))
+        self.assertTrue(self.bp.get_function('functions/teleport/home.mcfunction'))
 
     def test_non_existent_function(self):
         with self.assertRaises(AssetNotFoundError):
-            self.bp.get_function('no_function.mcfunction')
+            self.bp.get_function('functions/no_function.mcfunction')
 
     def test_editing_command(self):
         function = self.bp.functions[0]
@@ -129,7 +149,7 @@ class TestDirty(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
-        self.function = self.bp.get_function('kill_all_safe.mcfunction')
+        self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
         self.command = self.function.commands[0]
         self.component = self.entity.get_component('minecraft:type_family')
 
@@ -254,6 +274,14 @@ class TestShortnameResourceTriple(unittest.TestCase):
         self.assertEqual(animation.id, 'animation.guardian.missing')
         self.assertEqual(animation.resource, None)
         self.assertEqual(animation.exists(), False)
+
+    def test_saving(self):
+        """
+        Tests that we can save ShortnameResourceTriple
+        """
+
+        animation : ShortnameResourceTriple = self.dolphin.animations[0]
+
 
 class TestEntityFileBP(unittest.TestCase):
     def setUp(self) -> None:

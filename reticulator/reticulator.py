@@ -85,7 +85,7 @@ class AssetNotFoundError(ReticulatorException):
     """
 
 
-class InvalidJson(ReticulatorException):
+class InvalidJsonError(ReticulatorException):
     """
     Called when a JSON file is invalid.
     """
@@ -208,7 +208,7 @@ class Resource():
     def dirty(self, dirty):
         self._dirty = dirty
 
-    def register_resource(self, resource):
+    def register_resource(self, resource) -> None:
         """
         Register a child resource. These resources will always be saved first.
         """
@@ -341,9 +341,6 @@ class FileResource(Resource):
         be treated as the same, allowing other checks to take control.
         """
         return 0
-
-    def _save(self):
-        raise NotImplementedError("This file has not implemented a save method.")
 
 
 class JsonResource(Resource):
@@ -489,9 +486,6 @@ class JsonFileResource(FileResource, JsonResource):
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
-    # This should always be set, on a child class
-    parent_folder = "UNDEFINED"
-
     def _save(self):
         self.pack.save_json(self.file_path, self.data)
 
@@ -526,9 +520,6 @@ class JsonSubResource(JsonResource):
         # The data is the actual data of the sub-resource, minus the id.
         # For example a 'minecraft:scale' component has a data of {'value': 1.0}
         self.data = convert_to_notify_structure(data, self)
-
-        # Internal list of resources that are children of this sub-resource.
-        self._resources: JsonSubResource = []
 
         # Register self into parent, so that it can be found by the parent
         # during saving, etc.
@@ -567,21 +558,14 @@ class JsonSubResource(JsonResource):
         """
         return self._dirty
 
-
     @dirty.setter
     def dirty(self, dirty):
         """
-        Set the dirty flag, which stores whether this resource has been 
+        Set the dirty flag, which stores whether this resource has been
         modified since it was last saved.
         """
         self._dirty = dirty
         self.parent.dirty = dirty
-
-    def register_resource(self, resource: JsonSubResource) -> None:
-        """
-        Register a child resource within this resource.
-        """
-        self._resources.append(resource)
 
     def _save(self):
         """
@@ -601,7 +585,6 @@ class JsonSubResource(JsonResource):
         """
         self.parent.dirty = True
         self.parent.delete_jsonpath(self.json_path)
-
 
 class ShortnamePathDouble(Resource):
     """
@@ -635,9 +618,9 @@ class ShortnamePathDouble(Resource):
         return freeze(self.data)
 
 
-class ShortnameResourceTriple(Resource):
+class ShortnameResourceTriple(JsonResource):
     """
-    A str:Resource pair, which is used to store assets by their shortname.
+    A 'str:Resource' pair, which is used to store assets by their shortname.
 
     Useful in cases such as EntityRP, where a shortname resource is paired
     with an identifier, which can be converted into a resource
@@ -647,15 +630,39 @@ class ShortnameResourceTriple(Resource):
 
         # The key which is used to identify the resource within this context. 
         # For example 'move' is the shortname for  the 'animation.dog.move' resource.
-        self.shortname: str = shortname
+        self._shortname: str = shortname
 
         # The ID is the identifier for the resource, which is used to get the resource
         # from the pack. For example 'animation.dog.move' is the id for the 'move' resource.
-        self.id: str = id
+        self._id: str = id
 
         # The resource is the actual resource, which is paired with the shortname.
         # For example 'animation.dog.move' will be turned into an instance of AnimationRP.
         self.resource: Resource = resource
+
+    @property
+    def shortname(self):
+        return self._shortname
+    
+    @shortname.setter
+    def shortname(self, shortname):
+        self.dirty = True
+        self._shortname = shortname
+    
+    @property
+    def id(self):
+        return self._id
+    
+    @id.setter
+    def id(self, id):
+        self.dirty = True
+        self._id = id
+
+    def _save(self):
+        self.pack.save_json(self.file_path, self.data)
+
+    def _delete(self):
+        self._mark_for_deletion = True
 
     def exists(self):
         """
@@ -732,8 +739,6 @@ class FunctionFile(FileResource):
         super().__init__(file_path=file_path, pack=pack)
         self.__commands : list[Command] = []
     
-    parent_folder = "functions"
-
     def strip_comments(self):
         """
         Strips all comments from the function file.
@@ -754,7 +759,7 @@ class FunctionFile(FileResource):
         self.__commands = NotifyList(self.__commands, owner=self)
         return self.__commands
     
-    def _save(self):
+    def _save(self) -> None:
         path = os.path.join(self.pack.output_path, self.file_path)
         create_nested_directory(path)
         with open(path, 'w', encoding='utf-8') as file:
@@ -886,7 +891,7 @@ class Pack():
         for resource in self.resources:
             resource.save(force=force)
 
-    def register_resource(self, resource):
+    def register_resource(self, resource: Resource) -> None:
         """
         Register a child resource to this pack. These resources will be saved
         during save.
@@ -899,15 +904,15 @@ class Pack():
             pass
         self.resources.append(resource)
 
-    def get_language_file(self, file_name:str) -> LanguageFile:
+    def get_language_file(self, file_path:str) -> LanguageFile:
         """
         Gets a specific language file, based on the name of the language file.
         For example, 'en_GB.lang'
         """
         for language_file in self.language_files:
-            if language_file.file_name == file_name:
+            if language_file.file_path == file_path:
                 return language_file
-        raise AssetNotFoundError(file_name)
+        raise AssetNotFoundError(file_path)
 
     @cached_property
     def language_files(self) -> list[LanguageFile]:
@@ -928,7 +933,7 @@ class Pack():
             with open(path, "r", encoding='utf8') as fh:
                 return Pack.__get_json_from_file(fh)
         except:
-            raise InvalidJson(path)
+            raise InvalidJsonError(path)
 
     @staticmethod
     def __get_json_from_file(fh:TextIOWrapper) -> dict:
@@ -1259,10 +1264,9 @@ class ResourcePack(Pack):
         Example: get_animation_controller_file("example.json")
         """
         for acf in self.animation_controller_files:
-            path_to_try = os.path.join(AnimationControllerFileRP.parent_folder, file_path)
-            if smart_compare(acf.file_path, path_to_try):
+            if smart_compare(acf.file_path, file_path):
                 return acf
-        raise AssetNotFoundError(f"AnimationControllerFileRP with path '{path_to_try}' does not exist.")
+        raise AssetNotFoundError(f"AnimationControllerFileRP with path '{file_path}' does not exist.")
 
     def get_animation_file(self, file_path:str) -> AnimationFileRP:
         """
@@ -1272,10 +1276,9 @@ class ResourcePack(Pack):
         """
         
         for child in self.animation_files:
-            path_to_try = os.path.join(AnimationFileRP.parent_folder, file_path)
-            if smart_compare(child.file_path, path_to_try):
+            if smart_compare(child.file_path, file_path):
                 return child
-        raise AssetNotFoundError(f"AnimationFileRP with path '{path_to_try}' does not exist.")
+        raise AssetNotFoundError(f"AnimationFileRP with path '{file_path}' does not exist.")
 
     def get_entity(self, identifier:str) -> EntityFileRP:
         """
@@ -1289,7 +1292,7 @@ class ResourcePack(Pack):
                 return child
         raise AssetNotFoundError(f"Entity with identifier '{identifier}' does not exist.")
 
-    def get_model_file(self, file_name:str) -> ModelFile:
+    def get_model_file(self, file_path:str) -> ModelFile:
         """
         Gets the ModelFile with the given path.
 
@@ -1297,10 +1300,9 @@ class ResourcePack(Pack):
         """
         
         for model_file in self.model_files:
-            path_to_try = os.path.join(ModelFile.parent_folder, file_name)
-            if smart_compare(model_file.file_path, path_to_try):
+            if smart_compare(model_file.file_path, file_path):
                 return model_file
-        raise AssetNotFoundError(f"ModelFile with path '{path_to_try}' does not exist.")
+        raise AssetNotFoundError(f"ModelFile with path '{file_path}' does not exist.")
 
     def get_render_controller_file(self, file_path:str) -> RenderControllerFile:
         """
@@ -1310,10 +1312,9 @@ class ResourcePack(Pack):
         """
 
         for child in self.render_controller_files:
-            path_to_try = os.path.join(RenderControllerFile.parent_folder, file_path)
-            if smart_compare(child.file_path, path_to_try):
+            if smart_compare(child.file_path, file_path):
                 return child
-        raise AssetNotFoundError(f"RenderControllerFile with path '{path_to_try}' does not exist.")
+        raise AssetNotFoundError(f"RenderControllerFile with path '{file_path}' does not exist.")
 
     def get_animation(self, id:str) -> AnimationRP:
         """
@@ -1468,10 +1469,9 @@ class BehaviorPack(Pack):
         Example: bp.get_function('teleport/home.mcfunction')
         """
         for child in self.functions:
-            path_to_try = os.path.join(FunctionFile.parent_folder, file_path)
-            if smart_compare(child.file_path, path_to_try):
+            if smart_compare(child.file_path, file_path):
                 return child
-        raise AssetNotFoundError(f"Function with path '{path_to_try}' does not exist.")
+        raise AssetNotFoundError(f"Function with path '{file_path}' does not exist.")
 
     def get_feature_rule_file(self, identifier:str) -> FeatureRuleFile:
         """
@@ -1501,8 +1501,7 @@ class BehaviorPack(Pack):
 
         Example: bp.get_loot_table('entities/boat.json') 
         """
-        for child in self.recipes:
-            path_to_try = os.path.join(LootTableFile.parent_folder, file_path)
+        for child in self.loot_tables:
             if smart_compare(child.file_path, file_path):
                 return child
         raise AssetNotFoundError(f"LootTableFile with file_path '{file_path}' could not be found.")
@@ -1559,14 +1558,10 @@ class FeatureFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
-    parent_folder = "features"
-
 
 class RecipeFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-
-    parent_folder = "recipes"
 
     @property
     def identifier(self):
@@ -1584,8 +1579,6 @@ class ParticleFile(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components: JsonSubResource = []
         self.__events: JsonSubResource = []
-
-    parent_folder = "particles"
 
     @property
     def format_version(self):
@@ -1642,8 +1635,6 @@ class AttachableFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
-    parent_folder = "attachables"
-
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1665,8 +1656,6 @@ class FeatureRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
     
-    parent_folder = "feature_rules"
-
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:feature_rules/description/identifier")
@@ -1689,8 +1678,6 @@ class RenderControllerFile(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__render_controllers = []
     
-    parent_folder = "render_controllers"
-
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1718,8 +1705,6 @@ class AnimationControllerFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
-
-    parent_folder = "animation_controllers"
 
     @property
     def format_version(self):
@@ -1750,8 +1735,6 @@ class AnimationControllerFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
 
-    parent_folder = "animation_controllers"
-
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -1777,8 +1760,6 @@ class SpawnRuleFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
-    parent_folder = "spawn_rules"
-
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:spawn_rules/description/identifier")
@@ -1799,8 +1780,6 @@ class LootTableFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__pools = []
-
-    parent_folder = "loot_tables"
 
     @cached_property
     def pools(self) -> list[LootTablePool]:
@@ -1856,6 +1835,7 @@ class ItemTextureFile(JsonFileResource):
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+    
 
 
 class TerrainTextureFile(JsonFileResource):
@@ -1879,8 +1859,6 @@ class ItemFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
 
-    parent_folder = "items"
-
     @property
     def identifier(self):
         return self.get_jsonpath("minecraft:item/description/identifier")
@@ -1897,20 +1875,23 @@ class ItemFileRP(JsonFileResource):
     def format_version(self, format_version):
         return self.set_jsonpath("format_version", format_version)
 
-    
     @cached_property
     def components(self) -> list[Component]:
         for path, data in self.get_data_at("minecraft:item/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
+    
+    def get_component(self, id:str) -> Component:
+        for child in self.components:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(id)
 
 
 class ItemFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
-
-    parent_folder = "items"
 
     @property
     def identifier(self):
@@ -1925,6 +1906,12 @@ class ItemFileBP(JsonFileResource):
         for path, data in self.get_data_at("minecraft:item/components"):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
+    
+    def get_component(self, id:str) -> Component:
+        for child in self.components:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(id)
 
 # class FunctionTickFile(FileResource):
 #     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1935,8 +1922,6 @@ class BlockFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__components = []
-
-    parent_folder = "blocks"
 
     @property
     def identifier(self):
@@ -1952,6 +1937,12 @@ class BlockFileBP(JsonFileResource):
             self.__components.append(Component(parent = self, json_path = path, data = data))
         return self.__components
 
+    def get_component(self, id:str) -> Component:
+        for child in self.components:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(id)
+
 
 class EntityFileRP(JsonFileResource):
     """
@@ -1962,8 +1953,6 @@ class EntityFileRP(JsonFileResource):
         self.__animations: ShortnameResourceTriple = []
         self.__models: ShortnameResourceTriple = []
         self.__textures: ShortnamePathDouble = []
-
-    parent_folder = "entity"
 
     @property
     def identifier(self) -> str:
@@ -2047,8 +2036,6 @@ class AnimationFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations: AnimationRP = []
 
-    parent_folder = "animations"
-
     @property
     def format_version(self):
         return self.get_jsonpath("format_version")
@@ -2070,8 +2057,6 @@ class EntityFileBP(JsonFileResource):
         self.__component_groups = []
         self.__components = []
         self.__events = []
-
-    parent_folder = "entities"
 
     @property
     def format_version(self):
@@ -2141,8 +2126,6 @@ class ModelFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__models = []
-
-    parent_folder = "models"
 
     @cached_property
     def models(self) -> list[Model]:
@@ -2260,7 +2243,6 @@ class ComponentGroup(JsonSubResource):
         Gets a component from this group, by its ID.
         """
         for component in self.components:
-            print("BOB")
             if smart_compare(component.id, id):
                 return component
         raise AssetNotFoundError(f"Component called '{id}' could not be found in group '{self.id}'.")
