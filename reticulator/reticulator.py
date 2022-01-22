@@ -355,8 +355,17 @@ class JsonResource(Resource):
 
     def __init__(self, data: dict = None, file: FileResource = None, pack: Pack = None) -> None:
         super().__init__(file=file, pack=pack)
-        self.data = convert_to_notify_structure(data, self)
+        self._data = convert_to_notify_structure(data, self)
 
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, data):
+        self.dirty = True
+        self._data = convert_to_notify_structure(data, self)
+        
     def _save(self):
         raise NotImplementedError("This json resource cannot be saved.")
 
@@ -517,10 +526,6 @@ class JsonSubResource(JsonResource):
         # 'minecraft:scale', and a data of {'value': 1.0}
         self._id = self.get_id_from_jsonpath(json_path)
 
-        # The data is the actual data of the sub-resource, minus the id.
-        # For example a 'minecraft:scale' component has a data of {'value': 1.0}
-        self.data = convert_to_notify_structure(data, self)
-
         # Register self into parent, so that it can be found by the parent
         # during saving, etc.
         self.parent.register_resource(self)
@@ -533,7 +538,6 @@ class JsonSubResource(JsonResource):
     def id(self, id):
         self.dirty = True
         self._id = id
-
 
     # TODO This feels wrong?
     def get_id_from_jsonpath(self, json_path):
@@ -565,7 +569,12 @@ class JsonSubResource(JsonResource):
         modified since it was last saved.
         """
         self._dirty = dirty
-        self.parent.dirty = dirty
+
+        # TODO This is most likely wrong
+        try:
+            self.parent.dirty = dirty
+        except AttributeError:
+            pass
 
     def _save(self):
         """
@@ -585,6 +594,41 @@ class JsonSubResource(JsonResource):
         """
         self.parent.dirty = True
         self.parent.delete_jsonpath(self.json_path)
+
+class AnimationTriple(JsonSubResource):
+    """
+    A special sub-resource, which represents an animation within an RP entity.
+    """
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+
+    @property
+    def shortname(self):
+        return self.id
+
+    @shortname.setter
+    def shortname(self, shortname):
+        self.id = shortname
+    
+    @property
+    def identifier(self):
+        return self.data
+    
+    @identifier.setter
+    def identifier(self, identifier):
+        self.data = identifier
+
+    @cached_property
+    def resource(self):
+        return self.parent.pack.get_animation(self.identifier)
+    
+    def exists(self):
+        try:
+            self.parent.pack.get_animation(self.identifier)
+            return True
+        except AssetNotFoundError:
+            return False
+
 
 class ShortnamePathDouble(Resource):
     """
@@ -616,61 +660,6 @@ class ShortnamePathDouble(Resource):
 
     def _create_hash(self):
         return freeze(self.data)
-
-
-class ShortnameResourceTriple(JsonResource):
-    """
-    A 'str:Resource' pair, which is used to store assets by their shortname.
-
-    Useful in cases such as EntityRP, where a shortname resource is paired
-    with an identifier, which can be converted into a resource
-    """
-    def __init__(self, shortname: str, id: str, resource: Resource, file: FileResource = None, pack: Pack = None) -> None:
-        super().__init__(file=file, pack=pack)
-
-        # The key which is used to identify the resource within this context. 
-        # For example 'move' is the shortname for  the 'animation.dog.move' resource.
-        self._shortname: str = shortname
-
-        # The ID is the identifier for the resource, which is used to get the resource
-        # from the pack. For example 'animation.dog.move' is the id for the 'move' resource.
-        self._id: str = id
-
-        # The resource is the actual resource, which is paired with the shortname.
-        # For example 'animation.dog.move' will be turned into an instance of AnimationRP.
-        self.resource: Resource = resource
-
-    @property
-    def shortname(self):
-        return self._shortname
-    
-    @shortname.setter
-    def shortname(self, shortname):
-        self.dirty = True
-        self._shortname = shortname
-    
-    @property
-    def id(self):
-        return self._id
-    
-    @id.setter
-    def id(self, id):
-        self.dirty = True
-        self._id = id
-
-    def _save(self):
-        self.pack.save_json(self.file_path, self.data)
-
-    def _delete(self):
-        self._mark_for_deletion = True
-
-    def exists(self):
-        """
-        Whether the underlying resource exists.
-        Useful for detecting cases where a resource is used but missing.
-        """
-        return self.resource is not None
-
 
 @dataclass
 class Translation:
@@ -1857,7 +1846,7 @@ class SoundsFile(JsonFileResource):
 class ItemFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__components = []
+        self.__components: Component = []
 
     @property
     def identifier(self):
@@ -1876,12 +1865,12 @@ class ItemFileRP(JsonFileResource):
         return self.set_jsonpath("format_version", format_version)
 
     @cached_property
-    def components(self) -> list[Component]:
+    def components(self) -> list[JsonSubResource]:
         for path, data in self.get_data_at("minecraft:item/components"):
-            self.__components.append(Component(parent = self, json_path = path, data = data))
+            self.__components.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__components
     
-    def get_component(self, id:str) -> Component:
+    def get_component(self, id:str) -> JsonSubResource:
         for child in self.components:
             if smart_compare(child.id, id):
                 return child
@@ -1921,7 +1910,7 @@ class ItemFileBP(JsonFileResource):
 class BlockFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__components = []
+        self.__components: list[JsonSubResource] = []
 
     @property
     def identifier(self):
@@ -1932,12 +1921,12 @@ class BlockFileBP(JsonFileResource):
         return self.set_jsonpath("minecraft:block/description/identifier", identifier)
 
     @cached_property
-    def components(self) -> list[Component]:
+    def components(self) -> list[JsonSubResource]:
         for path, data in self.get_data_at("minecraft:block/components"):
-            self.__components.append(Component(parent = self, json_path = path, data = data))
+            self.__components.append(JsonSubResource(parent = self, json_path = path, data = data))
         return self.__components
 
-    def get_component(self, id:str) -> Component:
+    def get_component(self, id:str) -> JsonSubResource:
         for child in self.components:
             if smart_compare(child.id, id):
                 return child
@@ -1950,7 +1939,7 @@ class EntityFileRP(JsonFileResource):
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__animations: ShortnameResourceTriple = []
+        self.__animations: AnimationTriple = []
         self.__models: ShortnameResourceTriple = []
         self.__textures: ShortnamePathDouble = []
 
@@ -1967,29 +1956,9 @@ class EntityFileRP(JsonFileResource):
         return self.pack.project.behavior_pack.get_entity(self.identifier)
 
     @cached_property
-    def animations(self) -> list[ShortnameResourceTriple]:
-        """
-        The animations of the entity, as a list of ShortnameResourceTriple objects.
-        Using this structure, you can get the animation's shortname, identifier, and 
-        Resource definition.
-        """
-        data = self.get_jsonpath("minecraft:client_entity/description/animations")
-        for shortname, animation_id in data.items():
-            # It may be desirable to have the animation's identifier as a string,
-            # even if the resource cannot be loaded.
-            try:
-                animation = self.pack.get_animation(animation_id)
-            except AssetNotFoundError:
-                animation = None
-
-            self.__animations.append(
-                ShortnameResourceTriple(
-                    shortname,
-                    animation_id,
-                    animation
-                )
-            )
-
+    def animations(self) -> list[AnimationTriple]:
+        for path, data in self.get_data_at("minecraft:client_entity/description/animations"):
+            self.__animations.append(AnimationTriple(parent = self, json_path = path, data = data))
         return self.__animations
     
     @cached_property
@@ -2003,7 +1972,9 @@ class EntityFileRP(JsonFileResource):
             self.__textures.append(
                 ShortnamePathDouble(
                     shortname,
-                    texture_path
+                    texture_path,
+                    file=self,
+                    pack=self.pack
                 )
             )
 

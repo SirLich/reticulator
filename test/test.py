@@ -7,13 +7,20 @@ from reticulator import *
 
 def get_packs():
     project = Project('./content/bp/', './content/rp/')
+    project.resource_pack.output_path = './test_output/rp/'
+    project.behavior_pack.output_path = './test_output/bp/'
     return project.behavior_pack, project.resource_pack
 
-def create_output_directory():
-    os.mkdir('test_output')
+def get_saved_packs():
+    project = Project('./test_output/bp/', './test_output/rp/')
 
-def clean_up_output_directory():
-    os.remove('test_output')
+def prepare_output_directory():
+    try:
+        os.remove('./test_output')
+    except:
+        pass
+
+    os.mkdir('./test_output')
 
 class TestRenderControllers(unittest.TestCase):
     def setUp(self) -> None:
@@ -256,7 +263,7 @@ class TestShortnameResourceTriple(unittest.TestCase):
         animation = animations[0]
         self.assertEqual(animation.shortname, 'move')
         self.assertEqual(animation.resource.id, 'animation.dolphin.move')
-        self.assertEqual(animation.id, 'animation.dolphin.move')
+        self.assertEqual(animation.identifier, 'animation.dolphin.move')
         self.assertEqual(animation.exists(), True)
 
     def test_missing_resources(self):
@@ -271,9 +278,11 @@ class TestShortnameResourceTriple(unittest.TestCase):
         animation = animations[-1]
 
         self.assertEqual(animation.shortname, 'missing')
-        self.assertEqual(animation.id, 'animation.guardian.missing')
-        self.assertEqual(animation.resource, None)
+        self.assertEqual(animation.identifier, 'animation.guardian.missing')
         self.assertEqual(animation.exists(), False)
+
+        with self.assertRaises(AssetNotFoundError):
+            animation.resource
 
     def test_saving(self):
         """
@@ -281,7 +290,7 @@ class TestShortnameResourceTriple(unittest.TestCase):
         """
 
         animation : ShortnameResourceTriple = self.dolphin.animations[0]
-
+        animation.save()
 
 class TestEntityFileBP(unittest.TestCase):
     def setUp(self) -> None:
@@ -293,7 +302,6 @@ class TestEntityFileBP(unittest.TestCase):
         group = self.entity.get_component_group('dolphin_adult')
         self.assertEqual(group.id, 'dolphin_adult')
         self.assertEqual(len(group.components), 4)
-
 
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:

@@ -17,3 +17,5 @@
  - Added ItemFileRP.get_component
  - Added BlockFileBP.get_component
  - Added ItemFileBP.get_component
+ - Simple data types (string, float, int) now get marked as dirty, when set in-whole
+ - Setting 'JsonResource.data' to a new array/dict will properly convert to notify structure
