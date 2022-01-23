@@ -1,26 +1,28 @@
 import unittest
 import sys
 import functools
+import shutil
 
 sys.path.insert(0, '../reticulator')
 from reticulator import *
 
 def get_packs():
     project = Project('./content/bp/', './content/rp/')
-    project.resource_pack.output_path = './test_output/rp/'
-    project.behavior_pack.output_path = './test_output/bp/'
+    project.resource_pack.output_path = './out/rp/'
+    project.behavior_pack.output_path = './out/bp/'
     return project.behavior_pack, project.resource_pack
 
 def get_saved_packs():
-    project = Project('./test_output/bp/', './test_output/rp/')
+    project = Project('./out/bp/', './out/rp/')
+    return project.behavior_pack, project.resource_pack
 
 def prepare_output_directory():
     try:
-        os.remove('./test_output')
-    except:
+        shutil.rmtree('./out')
+    except OSError as e:
         pass
 
-    os.mkdir('./test_output')
+    os.mkdir('./out')
 
 class TestRenderControllers(unittest.TestCase):
     def setUp(self) -> None:
@@ -40,7 +42,6 @@ class TestRenderControllers(unittest.TestCase):
     
     def test_internals(self):
         self.assertEqual(self.rp.get_render_controller('controller.render.dolphin').file.format_version, '1.8.0')
-
 
 class TestLootTables(unittest.TestCase):
     def setUp(self) -> None:
@@ -246,7 +247,7 @@ class TestParticle(unittest.TestCase):
         self.assertEqual(component.get_jsonpath('num_particles'), 20)
         self.assertEqual(component.data['num_particles'], 20)
 
-class TestShortnameResourceTriple(unittest.TestCase):
+class TestAnimationTriple(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.dolphin = self.rp.get_entity('minecraft:dolphin')
@@ -286,11 +287,28 @@ class TestShortnameResourceTriple(unittest.TestCase):
 
     def test_saving(self):
         """
-        Tests that we can save ShortnameResourceTriple
+        Tests that we can save AnimationTriple
         """
 
-        animation : ShortnameResourceTriple = self.dolphin.animations[0]
-        animation.save()
+        # Edit the resource
+        animation : AnimationTriple = self.dolphin.animations[0]
+        animation.shortname = 'new_shortname'
+        animation.identifier = 'new_identifier'
+
+        # Save the resource
+        prepare_output_directory()
+        self.rp.save()
+
+        # Test the saved resource
+        out_bp, out_rp = get_saved_packs()
+        animation = out_rp.get_entity('minecraft:dolphin').animations[0]
+
+        self.assertEqual(animation.shortname, 'new_shortname')
+        self.assertEqual(animation.identifier, 'new_identifier')
+
+        # Raise error for the renamed resource
+        with self.assertRaises(AssetNotFoundError):
+            self.dolphin.get_animation('move')
 
 class TestEntityFileBP(unittest.TestCase):
     def setUp(self) -> None:

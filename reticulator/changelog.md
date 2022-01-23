@@ -19,3 +19,6 @@
  - Added ItemFileBP.get_component
  - Simple data types (string, float, int) now get marked as dirty, when set in-whole
  - Setting 'JsonResource.data' to a new array/dict will properly convert to notify structure
+ - JsonSubResource.id now serializes into json_path, and both properties dirty the asset for saving
+ - Enabled the possibility to rename or move an asset via either ID or jsonpath
+ - Rewrote how textures/models/animations are handled inside of the RP Entity file.

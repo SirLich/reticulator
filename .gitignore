@@ -1,5 +1,5 @@
 !reticulator.py
-test/test_output
+test/out
 test/exp.py
 
 # Byte-compiled / optimized / DLL files
