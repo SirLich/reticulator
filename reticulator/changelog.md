@@ -22,3 +22,6 @@
  - JsonSubResource.id now serializes into json_path, and both properties dirty the asset for saving
  - Enabled the possibility to rename or move an asset via either ID or jsonpath
  - Rewrote how textures/models/animations are handled inside of the RP Entity file.
+
+# 0.0.15-beta
+ - Removed 'must_exists' and 'ensure_exists' from all jsonpath methods
