@@ -362,12 +362,8 @@ class TestJsonPathAccess(unittest.TestCase):
         Tests deleting paths from json data.
         """
         entity = self.bp.get_entity('minecraft:dolphin')
-
-        # Delete, with ensure_exists
-        with self.assertRaises(AssetNotFoundError):
-            entity.delete_jsonpath('dne', ensure_exists=True)
         
-        # Delete, without ensure_exists (should not error!)
+        # Test normal delete_jsonpath
         entity.delete_jsonpath('dne')
 
         # Delete string
@@ -388,11 +384,7 @@ class TestJsonPathAccess(unittest.TestCase):
         entity.set_jsonpath('new_key', 'new_value')
         self.assertEqual(entity.get_jsonpath('new_key'), 'new_value')
 
-        # must_exist=True
-        with self.assertRaises(AssetNotFoundError):
-            entity.set_jsonpath('does_not_exist', 'new_value', must_exist=True)
-
-        # must_exist=False (implied)
+        # Test works if path does not exist
         entity.set_jsonpath('does_not_exist', 'new_value')
 
         # Test overwrite=False
@@ -412,10 +404,6 @@ class TestJsonPathAccess(unittest.TestCase):
 
         # Test normal pop
         self.assertEqual(entity.pop_jsonpath('minecraft:entity/description/identifier'), 'minecraft:dolphin')
-        
-        # Test non-existent pop
-        with self.assertRaises(AssetNotFoundError):
-            entity.pop_jsonpath('dne')
 
         # Test default
         self.assertEqual(entity.pop_jsonpath('dne', default='default_value'), 'default_value')
