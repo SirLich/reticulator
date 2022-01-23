@@ -363,7 +363,7 @@ class TestJsonPathAccess(unittest.TestCase):
         """
         entity = self.bp.get_entity('minecraft:dolphin')
         
-        # Test normal delete_jsonpath
+        # Test deleting a path which does not exist
         entity.delete_jsonpath('dne')
 
         # Delete string
