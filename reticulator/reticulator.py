@@ -698,7 +698,7 @@ class TextureDouble(JsonSubResource):
         """
         return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
 
-class MaterialDouble(JsonSubResource):
+class MaterialTriple(JsonSubResource):
     """
     A special sub-resource, which represents a material within an RP entity.
     """
@@ -720,12 +720,17 @@ class MaterialDouble(JsonSubResource):
     @identifier.setter
     def identifier(self, identifier):
         self.data = identifier
+
+    @cached_property
+    def resource(self):
+        return self.parent.pack.get_material(self.identifier)
     
-    def exists(self) -> bool:
-        """
-        Returns True if this resource exists in the pack.
-        """
-        return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
+    def exists(self):
+        try:
+            self.parent.pack.get_material(self.identifier)
+            return True
+        except AssetNotFoundError:
+            return False
 
 @dataclass
 class Translation:
@@ -2103,7 +2108,7 @@ class EntityFileRP(JsonFileResource):
             self.__materials.append(MaterialDouble(parent = self, json_path = path, data = data))
         return self.__materials
     
-    def get_materials(self, identifier:str) -> MaterialDouble:
+    def get_material(self, identifier:str) -> MaterialDouble:
         """
         Fetches a material resource, either by shortname, or material type.
         """
