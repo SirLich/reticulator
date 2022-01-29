@@ -2043,7 +2043,7 @@ class EntityFileRP(JsonFileResource):
         self.__animations: AnimationTriple = []
         self.__models: ModelTriple = []
         self.__textures: TextureDouble = []
-        self.__materials: MaterialDouble = []
+        self.__materials: MaterialTriple = []
 
     @property
     def identifier(self) -> str:
@@ -2103,12 +2103,12 @@ class EntityFileRP(JsonFileResource):
         raise AssetNotFoundError(id)
 
     @cached_property
-    def materials(self) -> list[MaterialDouble]:
+    def materials(self) -> list[MaterialTriple]:
         for path, data in self.get_data_at("minecraft:client_entity/description/materials"):
-            self.__materials.append(MaterialDouble(parent = self, json_path = path, data = data))
+            self.__materials.append(MaterialTriple(parent = self, json_path = path, data = data))
         return self.__materials
     
-    def get_material(self, identifier:str) -> MaterialDouble:
+    def get_material(self, identifier:str) -> MaterialTriple:
         """
         Fetches a material resource, either by shortname, or material type.
         """

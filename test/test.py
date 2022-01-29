@@ -95,7 +95,66 @@ class TestTextures(unittest.TestCase):
     def test_get_textures_trim(self):
         self.assertEqual(self.rp.get_textures('entity', trim_extension=False)[0], 'textures/entity/alex.png')
         self.assertEqual(self.rp.get_textures('entity', trim_extension=True)[0], 'textures/entity/alex')
-            
+
+class TestMaterials(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_material_files(self):
+        self.assertEqual(len(self.rp.material_files), 1)
+
+    def test_materials(self):
+        self.assertEqual(len(self.rp.materials), 5)
+
+    def test_get_material_file(self):
+        self.rp.get_material_file('materials/test.material')
+        with self.assertRaises(AssetNotFoundError):
+            self.rp.get_material_file('materials/dne.material')
+
+    def test_get_material(self):
+        self.rp.get_material('dolphin')
+        with self.assertRaises(AssetNotFoundError):
+            self.rp.get_material('dne')
+    
+class TestMaterialTriple(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.dolphin = self.rp.get_entity('minecraft:dolphin')
+        self.elder_guardian = self.rp.get_entity('minecraft:elder_guardian')
+
+    def test_existing_resources(self):
+        """
+        Tests that we can generate and use a ShortnameResourceTriple
+        """
+
+        materials = self.dolphin.materials
+        self.assertEqual(len(materials), 1)
+
+        material = materials[0]
+        self.assertEqual(material, self.dolphin.get_material('default'))
+        self.assertEqual(material.shortname, 'default')
+        self.assertEqual(material.resource.id, 'dolphin')
+        self.assertEqual(material.identifier, 'dolphin')
+        self.assertEqual(material.exists(), True)
+
+    def test_missing_resources(self):
+        """
+        Test the behavior of ShortnameResourceTriple when the resource is missing.
+        """
+
+        materials = self.elder_guardian.materials
+        self.assertEqual(len(materials), 2)
+
+        # Get the last material, which is missing
+        material = materials[1]
+
+        self.assertEqual(material.shortname, 'ghost')
+        self.assertEqual(material.identifier, 'guardian_ghost')
+        self.assertEqual(material.exists(), False)
+
+        with self.assertRaises(AssetNotFoundError):
+            material.resource
+    
 class TestFunctions(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
