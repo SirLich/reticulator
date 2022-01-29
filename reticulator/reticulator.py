@@ -689,6 +689,35 @@ class TextureDouble(JsonSubResource):
         return self.data
     
     @texture_path.setter
+    def texture_path(self, texture_path):
+        self.data = texture_path
+    
+    def exists(self) -> bool:
+        """
+        Returns True if this resource exists in the pack.
+        """
+        return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
+
+class MaterialDouble(JsonSubResource):
+    """
+    A special sub-resource, which represents a material within an RP entity.
+    """
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+
+    @property
+    def shortname(self):
+        return self.id
+
+    @shortname.setter
+    def shortname(self, shortname):
+        self.id = shortname
+    
+    @property
+    def identifier(self):
+        return self.data
+    
+    @identifier.setter
     def identifier(self, identifier):
         self.data = identifier
     
@@ -1979,6 +2008,7 @@ class EntityFileRP(JsonFileResource):
         self.__animations: AnimationTriple = []
         self.__models: ModelTriple = []
         self.__textures: TextureDouble = []
+        self.__materials: MaterialDouble = []
 
     @property
     def identifier(self) -> str:
@@ -2033,6 +2063,21 @@ class EntityFileRP(JsonFileResource):
         Fetches a model resource, either by shortname, or identifier.
         """
         for child in self.models:
+            if smart_compare(child.shortname, identifier) or smart_compare(child.identifier, identifier):
+                return child
+        raise AssetNotFoundError(id)
+
+    @cached_property
+    def materials(self) -> list[MaterialDouble]:
+        for path, data in self.get_data_at("minecraft:client_entity/description/materials"):
+            self.__materials.append(MaterialDouble(parent = self, json_path = path, data = data))
+        return self.__materials
+    
+    def get_materials(self, identifier:str) -> MaterialDouble:
+        """
+        Fetches a material resource, either by shortname, or material type.
+        """
+        for child in self.materials:
             if smart_compare(child.shortname, identifier) or smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(id)
