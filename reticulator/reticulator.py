@@ -698,7 +698,7 @@ class TextureDouble(JsonSubResource):
         """
         return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
 
-class MaterialDouble(JsonSubResource):
+class MaterialTriple(JsonSubResource):
     """
     A special sub-resource, which represents a material within an RP entity.
     """
@@ -720,12 +720,17 @@ class MaterialDouble(JsonSubResource):
     @identifier.setter
     def identifier(self, identifier):
         self.data = identifier
+
+    @cached_property
+    def resource(self):
+        return self.parent.pack.get_material(self.identifier)
     
-    def exists(self) -> bool:
-        """
-        Returns True if this resource exists in the pack.
-        """
-        return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
+    def exists(self):
+        try:
+            self.parent.pack.get_material(self.identifier)
+            return True
+        except AssetNotFoundError:
+            return False
 
 @dataclass
 class Translation:
@@ -2038,7 +2043,7 @@ class EntityFileRP(JsonFileResource):
         self.__animations: AnimationTriple = []
         self.__models: ModelTriple = []
         self.__textures: TextureDouble = []
-        self.__materials: MaterialDouble = []
+        self.__materials: MaterialTriple = []
 
     @property
     def identifier(self) -> str:
@@ -2098,12 +2103,12 @@ class EntityFileRP(JsonFileResource):
         raise AssetNotFoundError(id)
 
     @cached_property
-    def materials(self) -> list[MaterialDouble]:
+    def materials(self) -> list[MaterialTriple]:
         for path, data in self.get_data_at("minecraft:client_entity/description/materials"):
-            self.__materials.append(MaterialDouble(parent = self, json_path = path, data = data))
+            self.__materials.append(MaterialTriple(parent = self, json_path = path, data = data))
         return self.__materials
     
-    def get_materials(self, identifier:str) -> MaterialDouble:
+    def get_material(self, identifier:str) -> MaterialTriple:
         """
         Fetches a material resource, either by shortname, or material type.
         """
