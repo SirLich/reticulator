@@ -25,3 +25,4 @@
 
 # 0.0.15-beta
  - Removed 'must_exists' and 'ensure_exists' from all jsonpath methods
+ - Fix the setter for TexturePair texture_path
