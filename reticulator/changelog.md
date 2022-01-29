@@ -26,3 +26,8 @@
 # 0.0.15-beta
  - Removed 'must_exists' and 'ensure_exists' from all jsonpath methods
  - Fix the setter for TexturePair texture_path
+ - Added EntityRP.materials
+ - Added ResourcePack.materials
+ - Added ResourcePack.material_files
+ - Added ResourcePack.get_material_file
+ - Added ResourcePack.get_material

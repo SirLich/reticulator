@@ -1063,16 +1063,19 @@ class Project():
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
-        self.__particles: ParticleFile = []
-        self.__attachables: AttachableFileRP = []
-        self.__animation_controller_files: AnimationControllerFileRP = []
-        self.__animation_files: AnimationControllerFileRP = []
-        self.__entities: EntityFileRP = []
-        self.__model_files: ModelFile = []
-        self.__render_controller_files: RenderControllerFile = []
-        self.__items: ItemFileRP = []
+        self.__particles: list[ParticleFile] = []
+        self.__attachables: list[AttachableFileRP] = []
+        self.__animation_controller_files: list[AnimationControllerFileRP] = []
+        self.__animation_files: list[AnimationControllerFileRP] = []
+        self.__entities: list[EntityFileRP] = []
+        self.__model_files: list[ModelFile] = []
+        self.__models: list[Model] = []
+        self.__render_controller_files: list[RenderControllerFile] = []
+        self.__items: list[ItemFileRP] = []
         self.__sounds: list[str] = []
         self.__textures: list[str] = []
+        self.__material_files: list[MaterialFile] = []
+        self.__materials: list[Material] = []
 
         self.__sounds_file: SoundsFile = None
         self.__sound_definitions_file: SoundDefinitionsFile = None
@@ -1118,6 +1121,14 @@ class ResourcePack(Pack):
             self.__animation_files.append(AnimationFileRP(file_path = local_path, pack = self))
             
         return self.__animation_files
+
+    @cached_property
+    def material_files(self) -> list[MaterialFile]:
+        base_directory = os.path.join(self.input_path, "materials")
+        for local_path in glob.glob(base_directory + "/**/*.material", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__material_files.append(MaterialFile(file_path = local_path, pack = self))
+        return self.__material_files
 
     @cached_property
     def entities(self) -> list[EntityFileRP]:
@@ -1181,11 +1192,17 @@ class ResourcePack(Pack):
 
     @cached_property
     def models(self) -> list[Model]:
-        children = []
         for file in self.model_files:
             for child in file.models:
-                children.append(child)
-        return children
+                self.__models.append(child)
+        return self.__models
+
+    @cached_property
+    def materials(self) -> list[Material]:
+        for file in self.material_files:
+            for child in file.materials:
+                self.__materials.append(child)
+        return self.__materials
 
     @cached_property
     def sounds(self) -> list[str]:
@@ -1322,6 +1339,19 @@ class ResourcePack(Pack):
             if smart_compare(acf.file_path, file_path):
                 return acf
         raise AssetNotFoundError(f"AnimationControllerFileRP with path '{file_path}' does not exist.")
+
+    def get_material_file(self, file_path:str) -> MaterialFile:
+        for material_file in self.material_files:
+            if smart_compare(material_file.file_path, file_path):
+                return material_file
+        raise AssetNotFoundError(f"MaterialFile with path '{file_path}' does not exist.")
+
+    def get_material(self, id:str) -> Material:
+        for file_child in self.material_files:
+            for child in file_child.materials:
+                if smart_compare(child.id, id):
+                    return child
+        raise AssetNotFoundError(f"MaterialRP with id '{id}' does not exist.")
 
     def get_animation_file(self, file_path:str) -> AnimationFileRP:
         """
@@ -2082,6 +2112,22 @@ class EntityFileRP(JsonFileResource):
                 return child
         raise AssetNotFoundError(id)
 
+class MaterialFile(JsonFileResource):
+    """
+    MaterialFile is a class which represents a resource pack's material file.
+    Since many materials can be defined in the same file, it is often more useful
+    to use the MaterialRP class directly.
+    """
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        self.__materials: Material = []
+
+    @cached_property
+    def materials(self) -> list[Material]:
+        for path, data in self.get_data_at("**"):
+            self.__materials.append(Material(parent = self, json_path = path, data = data))
+        return self.__materials
+
 class AnimationFileRP(JsonFileResource):
     """
     AnimationFileRP is a class which represents a resource pack's animation file.
@@ -2194,6 +2240,9 @@ class RenderController(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
+class Material(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
 
 class Cube(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
