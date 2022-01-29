@@ -696,8 +696,8 @@ class TextureDouble(JsonSubResource):
         return self.data
     
     @texture_path.setter
-    def identifier(self, identifier):
-        self.data = identifier
+    def texture_path(self, texture_path):
+        self.data = texture_path
     
     def exists(self) -> bool:
         """
