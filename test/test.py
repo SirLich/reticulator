@@ -8,11 +8,22 @@ from reticulator import *
 
 def get_packs():
     project = Project('./content/bp/', './content/rp/')
-    project.resource_pack.output_path = './out/rp/'
-    project.behavior_pack.output_path = './out/bp/'
     return project.behavior_pack, project.resource_pack
 
-def get_saved_packs():
+def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, force: bool = False):
+    # Prepare folder location
+    prepare_output_directory()
+
+    # Save the old packs
+    if rp is not None:
+        rp.output_path = './out/rp/'
+        rp.save(force=force)
+    
+    if bp is not None:
+        bp.output_path = './out/bp/'
+        bp.save(force=force)
+
+    # Return the saved packs packs
     project = Project('./out/bp/', './out/rp/')
     return project.behavior_pack, project.resource_pack
 
@@ -355,12 +366,9 @@ class TestAnimationTriple(unittest.TestCase):
         animation.identifier = 'new_identifier'
 
         # Save the resource
-        prepare_output_directory()
-        self.rp.save()
+        saved_bp, saved_rp = save_and_return_packs(rp=self.rp)
 
-        # Test the saved resource
-        out_bp, out_rp = get_saved_packs()
-        animation = out_rp.get_entity('minecraft:dolphin').animations[0]
+        animation = saved_rp.get_entity('minecraft:dolphin').animations[0]
 
         self.assertEqual(animation.shortname, 'new_shortname')
         self.assertEqual(animation.identifier, 'new_identifier')
@@ -392,6 +400,71 @@ class TestEntityFileRP(unittest.TestCase):
 
         # Check filepath
         self.assertEqual(self.entity.file_path, 'entity\\dolphin.entity.json')
+
+class TestDeletion(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project = Project('./content/bp/', './content/rp/')
+        self.bp = self.project.behavior_pack
+        self.rp = self.project.resource_pack
+
+    def test_file_deletion(self):
+        """
+        Tests that we can delete a file.
+        """
+
+        # Delete entity
+        entity = self.bp.get_entity('minecraft:dolphin')
+        entity.delete()
+
+        saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
+
+        # Check that the file is gone
+        with self.assertRaises(AssetNotFoundError):
+            saved_bp.get_entity('minecraft:dolphin')
+
+    def test_subresource_deletion(self):
+        # Delete entity
+        entity = self.bp.get_entity('minecraft:dolphin')
+        component = entity.get_component('minecraft:type_family')
+        component.delete()
+
+        saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
+        entity = saved_bp.get_entity('minecraft:dolphin')
+
+        with self.assertRaises(AssetNotFoundError):
+            component = entity.get_component('minecraft:type_family')
+    
+    def test_list_subresource_deletion(self):
+        model = self.rp.get_model('geometry.dolphin')
+        self.assertEqual(len(model.bones), 9)
+        bone = model.get_bone('bristle2')
+        bone.delete()
+
+        saved_bp, saved_rp = save_and_return_packs(rp=self.rp)
+
+        # bone = model.get_bone('bristle2')
+
+
+class TestModels(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project = Project('./content/bp/', './content/rp/')
+        self.bp = self.project.behavior_pack
+        self.rp = self.project.resource_pack
+
+    def test_model_file(self):
+        self.assertEqual(len(self.rp.models), 1)
+        self.assertTrue(len(self.rp.model_files), 1)
+        
+        model_file = self.rp.model_files[0]
+        model = self.rp.get_model('geometry.dolphin')
+        self.assertEqual(model_file.models[0].id, model.id)
+
+        self.assertEqual(model.file.file_name, 'dolphin.geo.json')
+
+    def test_bones(self):
+        model = self.rp.get_model('geometry.dolphin')
+        self.assertEqual(len(model.bones), 9)
+
 
 class TestJsonPathAccess(unittest.TestCase):
     """

@@ -2234,6 +2234,14 @@ class ModelFile(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__models = []
 
+    @property
+    def format_version(self):
+        return self.get_jsonpath("format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", format_version)
+
     @cached_property
     def models(self) -> list[Model]:
         for path, data in self.get_data_at("minecraft:geometry"):
@@ -2303,7 +2311,15 @@ class Model(JsonSubResource):
             self.__bones.append(Bone(parent = self, json_path = path, data = data))
         return self.__bones
     
-    
+    def get_bone(self, name:str) -> Bone:
+        """
+        Gets a Bone via its name field.
+        """
+        for bone in self.bones:
+            if smart_compare(bone.name, name):
+                return bone
+        raise AssetNotFoundError(f"Bone with name {name} not found.")
+
     @property
     def identifier(self):
         return self.get_jsonpath("description/identifier")
@@ -2394,7 +2410,15 @@ class Bone(JsonSubResource):
         super().__init__(data=data, parent=parent, json_path=json_path)
         
         self.__cubes = []
-        
+    
+    @property
+    def name(self):
+        return self.get_jsonpath("name")
+    
+    @name.setter
+    def identifier(self, name):
+        return self.set_jsonpath("name", name)
+
     
     @cached_property
     def cubes(self) -> list[Cube]:

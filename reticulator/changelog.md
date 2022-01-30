@@ -31,3 +31,8 @@
  - Added ResourcePack.material_files
  - Added ResourcePack.get_material_file
  - Added ResourcePack.get_material
+
+# 0.0.16-beta
+ - Added ModelFile.format_version
+ - Added Bone.name
+ - Added Model.get_bone
