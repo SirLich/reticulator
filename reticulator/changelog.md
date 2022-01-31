@@ -36,3 +36,6 @@
  - Added ModelFile.format_version
  - Added Bone.name
  - Added Model.get_bone
+ - Fixed inconsistent path comparison for rp.get_language_file
+ - File deletion now properly removes the file from disk
+ - Added LanguageFile.get_translation

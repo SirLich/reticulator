@@ -2,13 +2,13 @@ import unittest
 import sys
 import functools
 import shutil
+from typing import Union, Tuple
 
 sys.path.insert(0, '../reticulator')
 from reticulator import *
 
-def get_packs():
-    project = Project('./content/bp/', './content/rp/')
-    return project.behavior_pack, project.resource_pack
+def get_packs() -> Tuple[BehaviorPack, ResourcePack]:
+    return Project('./content/bp/', './content/rp/').get_packs()
 
 def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, force: bool = False):
     # Prepare folder location
@@ -451,9 +451,7 @@ class TestDeletion(unittest.TestCase):
 
 class TestModels(unittest.TestCase):
     def setUp(self) -> None:
-        self.project = Project('./content/bp/', './content/rp/')
-        self.bp = self.project.behavior_pack
-        self.rp = self.project.resource_pack
+        self.bp, self.rp = Project('./content/bp/', './content/rp/').get_packs()
 
     def test_model_file(self):
         self.assertEqual(len(self.rp.models), 1)
@@ -469,6 +467,36 @@ class TestModels(unittest.TestCase):
         model = self.rp.get_model('geometry.dolphin')
         self.assertEqual(len(model.bones), 9)
 
+class TestLanguageFiles(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_language_file(self):
+        self.assertEqual(len(self.rp.language_files), 1)
+
+        language_file = self.rp.get_language_file('texts/es_ES.lang')
+
+        with self.assertRaises(AssetNotFoundError):
+            self.rp.get_language_file('texts/dne.lang')
+
+        self.assertEqual(len(language_file.translations), 3)
+        translation = language_file.get_translation('accessibility.text.period')
+
+        self.assertEqual(translation.key, 'accessibility.text.period')
+        self.assertEqual(translation.value, 'Punto')
+        self.assertEqual(translation.comment, '')
+
+    def test_adding_translation(self):
+        language_file = self.rp.get_language_file('texts/es_ES.lang')
+        language_file.add_translation(Translation('new_key', 'new_value'))
+        language_file.add_translation(Translation('new_key2', 'new_value2', comment="Test"))
+
+        saved_bp, saved_rp = save_and_return_packs(rp=self.rp)
+
+        language_file = saved_rp.get_language_file('texts/es_ES.lang')
+        self.assertEqual(len(language_file.translations), 5)
+        translation = language_file.get_translation('new_key2')
+        self.assertEqual(translation.comment, 'Test')
 
 class TestJsonPathAccess(unittest.TestCase):
     """

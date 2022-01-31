@@ -7,8 +7,7 @@ from pathlib import Path
 import glob
 from functools import cached_property
 from io import TextIOWrapper
-from typing import Union
-from send2trash import send2trash
+from typing import Union, Tuple
 import copy
 import dpath.util
 
@@ -23,19 +22,13 @@ def create_nested_directory(path: str):
     """
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
-
-def freeze(o):
+def save_json(file_path, data):
     """
-    Makes a hash out of anything that contains only list,dict and hashable types
-    including string and numeric types
+    Saves json to a file_path, creating nested directory if required.
     """
-    if isinstance(o, dict):
-        return frozenset({ k:freeze(v) for k,v in o.items()}.items())
-
-    if isinstance(o,list):
-        return tuple(freeze(v) for v in o)
-
-    return hash(o)
+    create_nested_directory(file_path)
+    with open(file_path, "w+") as file_head:
+        return json.dump(data, file_head, indent=2, ensure_ascii=False)
 
 
 def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
@@ -214,23 +207,6 @@ class Resource():
         """
         self._resources.append(resource)
 
-    def _should_save(self):
-        """
-        Whether the asset can be saved.
-        By default, this is related to dirty status
-
-        Can be overridden by subclasses.
-        """
-        return self.dirty
-
-    def _should_delete(self):
-        """
-        Whether the asset can be deleted.
-
-        By default, returns true.
-        """
-        return True
-
     def _save(self):
         """
         Internal implementation of asset saving.
@@ -256,12 +232,12 @@ class Resource():
         the internal _save implementation.
         """
 
-        # TODO Maybe only files need this check?
-        # Assets without packs may not save.
-        if not self.pack:
+        # File Assets without packs may not save.
+        if isinstance(self, FileResource) and not self.pack:
             raise FloatingAssetError("Assets without a pack cannot be saved.")
 
-        if self._should_save() or force:
+        # Only dirty assets can be saved, unless forced.
+        if self.dirty or force:
             self.dirty = False
 
             # Save all children first
@@ -271,22 +247,17 @@ class Resource():
             # Now, save this resource
             self._save()
 
-    def delete(self, force=False):
+    def delete(self):
         """
         Deletes the resource. Should not be overridden.
         """
 
-        # TODO: Does deletion really need to be recursive?
-        if self._should_delete() or force:
-            # First, delete all resources of children
-            for resource in self._resources:
-                resource.delete(force=force)
+        # First, delete all resources of children
+        for resource in self._resources:
+            resource.delete()
 
-            # Then delete self
-            self._delete()
-
-            # TODO Do we need to call save here?
-
+        # Then delete self
+        self._delete()
 
 class FileResource(Resource):
     """
@@ -310,8 +281,6 @@ class FileResource(Resource):
         if file_path:
             self.file_name = os.path.basename(file_path)
 
-        # Protected
-        self._hash = self._create_hash()
         self._mark_for_deletion: bool = False
 
     def _delete(self):
@@ -322,26 +291,6 @@ class FileResource(Resource):
         without effecting the file system during normal operation.
         """
         self._mark_for_deletion = True
-
-    def _should_delete(self):
-        return not self._mark_for_deletion and super()._should_delete()
-
-    def _should_save(self):
-        # Files that have been deleted cannot be saved
-        if self._mark_for_deletion:
-            return False
-
-        return self._hash != self._create_hash() or super()._should_save()
-
-    def _create_hash(self):
-        """
-        Creates a hash for the file.
-
-        If a file doesn't want to implement a hash, then the file will always
-        be treated as the same, allowing other checks to take control.
-        """
-        return 0
-
 
 class JsonResource(Resource):
     """
@@ -356,7 +305,7 @@ class JsonResource(Resource):
     def __init__(self, data: dict = None, file: FileResource = None, pack: Pack = None) -> None:
         super().__init__(file=file, pack=pack)
         self._data = convert_to_notify_structure(data, self)
-
+    
     @property
     def data(self):
         return self._data
@@ -438,7 +387,6 @@ class JsonResource(Resource):
                 f"Path {json_path} does not exist."
             ) from exception
 
-
     def get_data_at(self, json_path):
         """
         Returns a list of jsonpaths found at this jsonpath location.
@@ -483,19 +431,55 @@ class JsonFileResource(FileResource, JsonResource):
         if data is not None:
             self.data = convert_to_notify_structure(data, self)
         else:
-            self.data = convert_to_notify_structure(self.pack.load_json(self.file_path), self)
+            self.data = convert_to_notify_structure(self.load_json(self.file_path), self)
 
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
+    def load_json(self, local_path: str) -> dict:
+        """
+        Loads json from file. `local_path` paramater is local to the projects
+        input path.
+        """
+        file_path = os.path.join(self.pack.input_path, local_path)
+        if not os.path.exists(file_path):
+            raise AssetNotFoundError(f"File not found: {file_path}")
+        
+        try:
+            with open(file_path, "r", encoding='utf8') as fh:
+                try:
+                    return json.load(fh)
+                except json.JSONDecodeError:
+                    try:
+                        fh.seek(0)
+                        contents = ""
+                        for line in fh.readlines():
+                            cleaned_line = line.split("//", 1)[0]
+                            if len(cleaned_line) > 0 and line.endswith("\n") and "\n" not in cleaned_line:
+                                cleaned_line += "\n"
+                            contents += cleaned_line
+                        while "/*" in contents:
+                            pre_comment, post_comment = contents.split("/*", 1)
+                            contents = pre_comment + post_comment.split("*/", 1)[1]
+                        return json.loads(contents)
+                    except json.JSONDecodeError as exception:
+                        return {}
+        except Exception:
+            raise InvalidJsonError(file_path)
+
     def _save(self):
-        self.pack.save_json(self.file_path, self.data)
+        save_path = os.path.join(self.pack.output_path, self.file_path)
+        create_nested_directory(save_path)
 
-    def _delete(self):
-        self._mark_for_deletion = True
-
-    def _create_hash(self):
-        return freeze(self.data)
+        # If the file has been marked for deletion, delete it
+        if self._mark_for_deletion:
+            # If the paths are the same, delete the file, otherwise
+            # we can just pass
+            if smart_compare(self.pack.input_path, self.pack.output_path):
+                os.remove(save_path)
+        else:
+            with open(save_path, "w+") as file_head:
+                return json.dump(self.data, file_head, indent=2, ensure_ascii=False)
 
 
 class JsonSubResource(JsonResource):
@@ -629,6 +613,10 @@ class ModelTriple(JsonSubResource):
         return self.parent.pack.get_model(self.identifier)
     
     def exists(self):
+        """
+        Whether the model described by this triple exists.
+        Can be used to detect if a entity is referencing a missing model.
+        """
         try:
             self.parent.pack.get_model(self.identifier)
             return True
@@ -663,6 +651,10 @@ class AnimationTriple(JsonSubResource):
         return self.parent.pack.get_animation(self.identifier)
     
     def exists(self):
+        """
+        Whether the animation described by this triple exists.
+        Can be used to detect if a entity is referencing a missing animation.
+        """
         try:
             self.parent.pack.get_animation(self.identifier)
             return True
@@ -732,16 +724,16 @@ class MaterialTriple(JsonSubResource):
         except AssetNotFoundError:
             return False
 
-@dataclass
 class Translation:
     """
     Dataclass for a translation. Many translations together make up a
     TranslationFile.
     """
-    key: str
-    value: str
-    comment: str
 
+    def __init__(self, key: str, value: str, comment: str = None) -> None:
+        self.key = key
+        self.value = value
+        self.comment = comment
 
 class Command(Resource):
     """
@@ -835,6 +827,15 @@ class LanguageFile(FileResource):
     def __init__(self, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(file_path=file_path, pack=pack)
         self.__translations: list[Translation] = []
+    
+    def get_translation(self, key: str) -> Translation:
+        """
+        Whether the language file contains the specified key.
+        """
+        for translation in self.translations:
+            if translation.key == key:
+                return translation 
+        raise AssetNotFoundError(f"Translation with key '{key}' not found in language file '{self.file_path}'.")
 
     def contains_translation(self, key: str) -> bool:
         """
@@ -919,31 +920,6 @@ class Pack():
         """
         return self._project
 
-    def load_json(self, local_path: str) -> dict:
-        """
-        Loads json from file. `local_path` paramater is local to the projects
-        input path.
-        """
-        file_path = os.path.join(self.input_path, local_path)
-        if not os.path.exists(file_path):
-            raise AssetNotFoundError(f"File not found: {file_path}")
-        
-        return self.get_json_from_path(file_path)
-
-    def save_json(self, local_path, data):
-        """
-        Saves json to file. 'local_path' paramater is local to the projects
-        output path.
-        """
-        return self.__save_json(os.path.join(self.output_path, local_path), data)
-
-    def delete_file(self, local_path):
-        # TODO: Why is this local to output path? Why does this except pass?
-        try:
-            send2trash(os.path.join(self.output_path, local_path))
-        except Exception:
-            pass
-
     def save(self, force=False):
         """
         Saves every child resource.
@@ -967,10 +943,10 @@ class Pack():
     def get_language_file(self, file_path:str) -> LanguageFile:
         """
         Gets a specific language file, based on the name of the language file.
-        For example, 'en_GB.lang'
+        For example, 'texts/en_GB.lang'
         """
         for language_file in self.language_files:
-            if language_file.file_path == file_path:
+            if smart_compare(language_file.file_path, file_path):
                 return language_file
         raise AssetNotFoundError(file_path)
 
@@ -986,50 +962,6 @@ class Pack():
             
         return self._language_files
 
-    ## TODO: Move these static methods OUT
-    @staticmethod
-    def get_json_from_path(path:str) -> dict:
-        try:
-            with open(path, "r", encoding='utf8') as fh:
-                return Pack.__get_json_from_file(fh)
-        except Exception:
-            raise InvalidJsonError(path)
-
-    @staticmethod
-    def __get_json_from_file(fh:TextIOWrapper) -> dict:
-        """
-        Loads json from file. First attempts to load with fast json.load method,
-        but if this fails, a custom comment-aware scraper is used.
-        """
-        try:
-            return json.load(fh)
-        except json.JSONDecodeError:
-            try:
-                fh.seek(0)
-                contents = ""
-                for line in fh.readlines():
-                    cleaned_line = line.split("//", 1)[0]
-                    if len(cleaned_line) > 0 and line.endswith("\n") and "\n" not in cleaned_line:
-                        cleaned_line += "\n"
-                    contents += cleaned_line
-                while "/*" in contents:
-                    pre_comment, post_comment = contents.split("/*", 1)
-                    contents = pre_comment + post_comment.split("*/", 1)[1]
-                return json.loads(contents)
-            except json.JSONDecodeError as exception:
-                return {}
-
-    @staticmethod
-    def __save_json(file_path, data):
-        """
-        Saves json to a file_path, creating nested directory if required.
-        """
-        create_nested_directory(file_path)
-
-        with open(file_path, "w+") as file_head:
-            return json.dump(data, file_head, indent=2, ensure_ascii=False)
-
-
 class Project():
     """
     A Project is a holder class which contains reference to both a single
@@ -1041,6 +973,14 @@ class Project():
         self.__resource_pack = None
         self.__behavior_pack : BehaviorPack = None
 
+    def get_packs(self) -> Tuple[behavior_pack, resource_pack]:
+        """
+        Returns Behavior Pack followed by ResourcePack.
+        Useful for quickly defining rp and bp:
+        rp, bp = Project("...").get_packs()
+        """
+        return self.behavior_pack, self.resource_pack
+        
     @cached_property
     def resource_pack(self) -> ResourcePack:
         """
@@ -2419,7 +2359,6 @@ class Bone(JsonSubResource):
     def identifier(self, name):
         return self.set_jsonpath("name", name)
 
-    
     @cached_property
     def cubes(self) -> list[Cube]:
         for path, data in self.get_data_at("cubes"):
