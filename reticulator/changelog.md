@@ -39,3 +39,5 @@
  - Fixed inconsistent path comparison for rp.get_language_file
  - File deletion now properly removes the file from disk
  - Added LanguageFile.get_translation
+ - Added Project.set_save_location
+ - Added Pack (either RP or BP).set_save_location

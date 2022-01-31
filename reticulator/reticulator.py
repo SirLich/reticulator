@@ -1,20 +1,19 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 import re
 import os
 import json
-from pathlib import Path
 import glob
+
+from pathlib import Path
 from functools import cached_property
-from io import TextIOWrapper
 from typing import Union, Tuple
-import copy
+
 import dpath.util
 
 NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
-
 
 def create_nested_directory(path: str):
     """
@@ -730,7 +729,7 @@ class Translation:
     TranslationFile.
     """
 
-    def __init__(self, key: str, value: str, comment: str = None) -> None:
+    def __init__(self, key: str, value: str, comment: str = "") -> None:
         self.key = key
         self.value = value
         self.comment = comment
@@ -913,6 +912,12 @@ class Pack():
         # explicitely saved.
         self.output_path: str = input_path
 
+    def set_save_locations(self, save_location: str) -> None:
+        """
+        Sets the output path for this pack.
+        """
+        self.output_path = save_location
+
     @cached_property
     def project(self) -> Project:
         """
@@ -972,6 +977,20 @@ class Project():
         self.__resource_path = resource_path
         self.__resource_pack = None
         self.__behavior_pack : BehaviorPack = None
+    
+    def set_save_locations(self, save_location: str) -> None:
+        """
+        Sets the save location of the RP and the BP, based on the folder
+        name from their input path.
+
+        In other words, pass in a folder where you want both the RP and the BP 
+        to be saved.
+
+        If you need finer control, use the 'set_save_location' method on the 
+        ResourcePack and BehaviorPack instead.
+        """
+        self.resource_pack.output_path = save_location + "/" + os.path.dirname(self.resource_pack.input_path)
+        self.behavior_pack.output_path = save_location + "/" + os.path.dirname(self.behavior_pack.input_path)
 
     def get_packs(self) -> Tuple[behavior_pack, resource_pack]:
         """
