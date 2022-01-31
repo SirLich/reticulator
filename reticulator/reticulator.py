@@ -1865,7 +1865,13 @@ class ItemTextureFile(JsonFileResource):
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+        self.__textures = []
     
+    @cached_property
+    def textures(self) -> list[TextureFileDouble]:
+        for path, data in self.get_data_at("texture_data"):
+            self.__textures.append(TextureFileDouble(parent = self, json_path = path, data = data))
+        return self.__textures
 
 
 class TerrainTextureFile(JsonFileResource):
@@ -1874,6 +1880,7 @@ class TerrainTextureFile(JsonFileResource):
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
+
 
 
 class SoundsFile(JsonFileResource):
@@ -2206,6 +2213,35 @@ class AnimationControllerStateRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
+class TextureFileDouble(JsonSubResource):
+    """
+    A special sub-resource, which represents a texture within an RP entity.
+    """
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+
+    @property
+    def shortname(self):
+        return self.id
+
+    @shortname.setter
+    def shortname(self, shortname):
+        self.id = shortname
+    
+    @property
+    def textures(self):
+        return self.data.get_jsonpath("textures")
+    
+    @textures.setter
+    def textures(self, textures):
+        self.data = textures
+    
+    def exists(self) -> bool:
+        """
+        Returns True if this resource exists in the pack.
+        """
+        return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
+   
 
 class LootTablePool(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
