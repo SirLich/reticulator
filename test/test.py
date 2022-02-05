@@ -35,6 +35,7 @@ def prepare_output_directory():
 
     os.mkdir('./out')
 
+
 class TestFogs(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -48,8 +49,6 @@ class TestFogs(unittest.TestCase):
 
         component = fog_file.get_distance_component('air')
         self.assertEqual(component.data['fog_end'], 60)
-
-
 
 
 class TestStandaloneTextureFiles(unittest.TestCase):
