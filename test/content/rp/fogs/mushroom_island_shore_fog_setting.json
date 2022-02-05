@@ -1,0 +1,33 @@
+{
+    "format_version": "1.16.100",
+    "minecraft:fog_settings": {
+        "description": {
+            "identifier": "minecraft:fog_mushroom_island_shore"
+        },
+        "distance": {
+            "water": {
+                "fog_start": 0,
+                "fog_end": 60,
+                "fog_color": "#818193",
+                "render_distance_type": "fixed"
+            },
+            "air": {
+                "fog_start": 0,
+                "fog_end": 60,
+                "fog_color": "#818193",
+                "render_distance_type": "fixed"
+            }
+        },
+        "volumetric": {
+            "density": {
+                "lava_resistance": {
+                    "max_density": 0
+                }
+            },
+            "media_coefficients": {
+                "air": {},
+                "cloud": {}
+            }
+        }
+    }
+}
