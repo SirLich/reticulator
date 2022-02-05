@@ -35,6 +35,23 @@ def prepare_output_directory():
 
     os.mkdir('./out')
 
+class TestFogs(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_fog_files(self):
+        self.assertEqual(len(self.rp.fogs), 3)
+        fog_file = self.rp.get_fog('minecraft:fog_mushroom_island_shore')
+        self.assertEqual(len(fog_file.distance_components), 2)
+        self.assertEqual(len(fog_file.volumetric_density_components), 1)
+        self.assertEqual(len(fog_file.volumetric_media_coefficients), 2)
+
+        component = fog_file.get_distance_component('air')
+        self.assertEqual(component.data['fog_end'], 60)
+
+
+
+
 class TestStandaloneTextureFiles(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()

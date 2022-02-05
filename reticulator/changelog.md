@@ -41,3 +41,17 @@
  - Added LanguageFile.get_translation
  - Added Project.set_save_location
  - Added Pack (either RP or BP).set_save_location
+ - Added new StandAloneTextureFile type for both `item_texture` and `terrain_texture`
+   - texture_definitions
+   - add_texture_definition
+   - get_texture_definition
+   - texture_definition type contains `shortname` and `textures`
+ - Added ResourcePack.fogs
+ - Added ResourcePack.get_fog
+ - FogFile resource:
+  - identifier
+  - format version
+  - distance_components
+  - volumetric_density_components
+  - volumetric_media_coefficients
+  - Getters for all component types

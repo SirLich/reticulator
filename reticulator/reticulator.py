@@ -1040,11 +1040,11 @@ class ResourcePack(Pack):
         self.__textures: list[str] = []
         self.__material_files: list[MaterialFile] = []
         self.__materials: list[Material] = []
-
+        self.__fogs: list[FogFile] = []
         self.__sounds_file: SoundsFile = None
         self.__sound_definitions_file: SoundDefinitionsFile = None
-        self.__terrain_texture_file: TextureFile = None
-        self.__item_texture_file: TextureFile = None
+        self.__terrain_texture_file: StandAloneTextureFile = None
+        self.__item_texture_file: StandAloneTextureFile = None
         self.__flipbook_textures_file: FlipbookTexturesFile = None
         self.__blocks_file: BlocksFile = None
         self.__biomes_client_file: BiomesClientFile = None
@@ -1100,8 +1100,15 @@ class ResourcePack(Pack):
         for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
             local_path = os.path.relpath(local_path, self.input_path)
             self.__entities.append(EntityFileRP(file_path = local_path, pack = self))
-            
         return self.__entities
+
+    @cached_property
+    def fogs(self) -> list[FogFile]:
+        base_directory = os.path.join(self.input_path, "fogs")
+        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
+            local_path = os.path.relpath(local_path, self.input_path)
+            self.__fogs.append(FogFile(file_path = local_path, pack = self))
+        return self.__fogs
 
     @cached_property
     def model_files(self) -> list[ModelFile]:
@@ -1246,15 +1253,15 @@ class ResourcePack(Pack):
         return self.__sound_definitions_file
 
     @cached_property
-    def terrain_texture_file(self) -> TextureFile:
+    def terrain_texture_file(self) -> StandAloneTextureFile:
         file_path = os.path.join("textures", "terrain_texture.json")
-        self.__terrain_texture_file = TextureFile(file_path = file_path, pack = self)
+        self.__terrain_texture_file = StandAloneTextureFile(file_path = file_path, pack = self)
         return self.__terrain_texture_file
 
     @cached_property
-    def item_texture_file(self) -> TextureFile:
+    def item_texture_file(self) -> StandAloneTextureFile:
         file_path = os.path.join("textures", "item_texture.json")
-        self.__item_texture_file = TextureFile(file_path = file_path, pack = self)
+        self.__item_texture_file = StandAloneTextureFile(file_path = file_path, pack = self)
         return self.__item_texture_file
 
     @cached_property
@@ -1281,6 +1288,13 @@ class ResourcePack(Pack):
             if smart_compare(child.identifier, identifier):
                 return child
         raise AssetNotFoundError(identifier)
+
+    def get_fog(self, identifier:str) -> FogFile:
+        for fog in self.fogs:
+            if smart_compare(fog.identifier, identifier):
+                return fog
+        raise AssetNotFoundError(f"Fog with identifier {identifier} could not be found.")
+
 
     def get_attachable(self, identifier:str) -> AttachableFileRP:
         """
@@ -1877,7 +1891,7 @@ class BiomesClientFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
-class TextureFile(JsonFileResource):
+class StandAloneTextureFile(JsonFileResource):
     """
     StandAloneTextureFile is a class which represents the data stored in 'rp/textures/*_texture.json'
     style files.
@@ -2197,6 +2211,65 @@ class EntityFileBP(JsonFileResource):
         return new_object
 
 
+class FogFile(JsonFileResource):
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        self.__distance_components: list[Component] = []
+        self.__volumetric_density_components: list[Component] = []
+        self.__volumetric_media_coefficients: list[Component] = []
+
+    @property
+    def format_version(self):
+        return self.get_jsonpath("format_version")
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", format_version)
+
+    @property
+    def identifier(self):
+        return self.get_jsonpath("minecraft:fog_settings/description/identifier")
+    
+    @format_version.setter
+    def format_version(self, identifier):
+        return self.set_jsonpath("minecraft:fog_settings/description/identifier", identifier)
+
+    @cached_property
+    def distance_components(self) -> list[Component]:
+        for path, data in self.get_data_at("minecraft:fog_settings/distance"):
+            self.__distance_components.append(Component(parent = self, json_path = path, data = data))
+        return self.__distance_components
+
+    @cached_property
+    def volumetric_density_components(self) -> list[Component]:
+        for path, data in self.get_data_at("minecraft:fog_settings/volumetric/density"):
+            self.__volumetric_density_components.append(Component(parent = self, json_path = path, data = data))
+        return self.__volumetric_density_components
+
+    @cached_property
+    def volumetric_media_coefficients(self) -> list[Component]:
+        for path, data in self.get_data_at("minecraft:fog_settings/volumetric/media_coefficients"):
+            self.__volumetric_media_coefficients.append(Component(parent = self, json_path = path, data = data))
+        return self.__volumetric_media_coefficients
+
+    def get_distance_component(self, id:str) -> Component:
+        for child in self.distance_components:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(f"Distance component with id '{id}' not found.")
+
+    def get_volumetric_density_component(self, id:str) -> Component:
+        for child in self.distance_components:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(f"Volumetric density component with id '{id}' not found.")
+
+    def get_volumetric_media_coefficient(self, id:str) -> Component:
+        for child in self.volumetric_media_coefficients:
+            if smart_compare(child.id, id):
+                return child
+        raise AssetNotFoundError(f"volumetric media coefficient component with id '{id}' not found.")
+
 class ModelFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -2221,9 +2294,11 @@ class RenderController(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
+
 class Material(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
+
 
 class Cube(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
@@ -2272,6 +2347,7 @@ class TextureFileDouble(JsonSubResource):
             "textures": self.textures
         }
 
+
 class LootTablePool(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
@@ -2297,13 +2373,13 @@ class AnimationControllerRP(JsonSubResource):
     def initial_state(self, initial_state):
         return self.set_jsonpath("initial_state", initial_state)
 
-    
     def get_state(self, id:str) -> AnimationControllerStateRP:
         for child in self.states:
             if smart_compare(child.id, id):
                 return child
         raise AssetNotFoundError(id)
-    
+
+
 class Model(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
