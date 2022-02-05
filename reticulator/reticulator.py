@@ -1043,8 +1043,8 @@ class ResourcePack(Pack):
 
         self.__sounds_file: SoundsFile = None
         self.__sound_definitions_file: SoundDefinitionsFile = None
-        self.__terrain_texture_file: TerrainTextureFile = None
-        self.__item_texture_file: ItemTextureFile = None
+        self.__terrain_texture_file: TextureFile = None
+        self.__item_texture_file: TextureFile = None
         self.__flipbook_textures_file: FlipbookTexturesFile = None
         self.__blocks_file: BlocksFile = None
         self.__biomes_client_file: BiomesClientFile = None
@@ -1246,15 +1246,15 @@ class ResourcePack(Pack):
         return self.__sound_definitions_file
 
     @cached_property
-    def terrain_texture_file(self) -> TerrainTextureFile:
+    def terrain_texture_file(self) -> TextureFile:
         file_path = os.path.join("textures", "terrain_texture.json")
-        self.__terrain_texture_file = TerrainTextureFile(file_path = file_path, pack = self)
+        self.__terrain_texture_file = TextureFile(file_path = file_path, pack = self)
         return self.__terrain_texture_file
 
     @cached_property
-    def item_texture_file(self) -> ItemTextureFile:
+    def item_texture_file(self) -> TextureFile:
         file_path = os.path.join("textures", "item_texture.json")
-        self.__item_texture_file = ItemTextureFile(file_path = file_path, pack = self)
+        self.__item_texture_file = TextureFile(file_path = file_path, pack = self)
         return self.__item_texture_file
 
     @cached_property
@@ -1877,30 +1877,32 @@ class BiomesClientFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
-
-class ItemTextureFile(JsonFileResource):
+class TextureFile(JsonFileResource):
     """
-    ItemTextureFile is a class which represents the data stored in 'rp/textures/item_texture.json'
+    StandAloneTextureFile is a class which represents the data stored in 'rp/textures/*_texture.json'
+    style files.
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__textures = []
+        self.__texture_definitions = []
     
     @cached_property
-    def textures(self) -> list[TextureFileDouble]:
+    def texture_definitions(self) -> list[TextureFileDouble]:
         for path, data in self.get_data_at("texture_data"):
-            self.__textures.append(TextureFileDouble(parent = self, json_path = path, data = data))
-        return self.__textures
+            self.__texture_definitions.append(TextureFileDouble(parent = self, json_path = path, data = data))
+        return self.__texture_definitions
 
+    def get_texture_definition(self, shortname: str) -> TextureFileDouble:
+        for child in self.texture_definitions:
+            if child.shortname == shortname:
+                return child
+        raise AssetNotFoundError(f"Texture definition for shortname '{shortname}' not found.")
 
-class TerrainTextureFile(JsonFileResource):
-    """
-    TerrainTextureFile is a class which represents the data stored in 'rp/textures/terrain_texture.json'
-    """
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
-
-
+    def add_texture_definition(self, shortname: str, textures: list[str]):
+        self.set_jsonpath(f"texture_data/{shortname}", {
+            "textures": textures
+        })
+        self.__texture_definitions.append(TextureFileDouble(parent = self, json_path = f"texture_data/{shortname}", data = {"textures": textures}))
 
 class SoundsFile(JsonFileResource):
     """
@@ -2232,12 +2234,25 @@ class AnimationControllerStateRP(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
+
 class TextureFileDouble(JsonSubResource):
     """
-    A special sub-resource, which represents a texture within an RP entity.
+    A special sub-resource, which represents a texture within a texture
+    definition file, such as 'item_texture.json'
+
+    This is a special case, as it has some additional logic for obscuring the
+    texture path. This is because textures are stored nested under 
+    'textures' which is simply inconvenient to work with.
     """
+
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
+ 
+        self.textures = data.get("textures", [])
+        if not isinstance(self.textures, list):
+            self.textures = [self.textures]
+
+        self.textures = convert_to_notify_structure(self.textures, self)
 
     @property
     def shortname(self):
@@ -2248,19 +2263,14 @@ class TextureFileDouble(JsonSubResource):
         self.id = shortname
     
     @property
-    def textures(self):
-        return self.data.get_jsonpath("textures")
-    
-    @textures.setter
-    def textures(self, textures):
-        self.data = textures
-    
-    def exists(self) -> bool:
+    def data(self):
         """
-        Returns True if this resource exists in the pack.
+        Custom data getter allows us to re-create the json structure based
+        on the saved textures.
         """
-        return os.path.exists(os.path.join(self.pack.input_path, self.file_path))
-   
+        return {
+            "textures": self.textures
+        }
 
 class LootTablePool(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:

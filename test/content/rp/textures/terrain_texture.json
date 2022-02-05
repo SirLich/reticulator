@@ -1,0 +1,34 @@
+{
+   "num_mip_levels" : 4,
+   "padding" : 8,
+   "resource_pack_name" : "vanilla",
+   "texture_name" : "atlas.terrain",
+   "texture_data" : {
+      "acacia_planks" : {
+         "textures" : "textures/blocks/planks_acacia"
+      },
+      "acacia_sign" : {
+         "textures" : "textures/blocks/planks_acacia"
+      },
+      "anvil_base" : {
+         "textures" : [
+            "textures/blocks/anvil_base",
+            "textures/blocks/anvil_base",
+            "textures/blocks/anvil_base",
+            "textures/blocks/anvil_base"
+         ]
+      },
+      "azalea_leaves" : {
+         "textures" : [
+            "textures/blocks/azalea_leaves",
+            "textures/blocks/azalea_leaves_opaque"
+         ]
+      },
+      "azalea_leaves_flowered" : {
+         "textures" : [
+            "textures/blocks/azalea_leaves_flowers",
+            "textures/blocks/azalea_leaves_flowers_opaque"
+         ]
+      }
+   }
+}

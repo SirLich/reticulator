@@ -1,0 +1,28 @@
+{
+   "resource_pack_name" : "vanilla",
+   "texture_name" : "atlas.items",
+   "texture_data" : {
+      "apple" : {
+         "textures" : "textures/items/apple"
+      },
+      "apple_golden" : {
+         "textures" : "textures/items/apple_golden"
+      },
+      "armor_stand" : {
+         "textures" : "textures/items/armor_stand"
+      },
+      "arrow" : {
+         "textures" : "textures/items/arrow"
+      },
+      "axe" : {
+         "textures" : [
+            "textures/items/wood_axe",
+            "textures/items/stone_axe",
+            "textures/items/iron_axe",
+            "textures/items/gold_axe",
+            "textures/items/diamond_axe",
+            "textures/items/netherite_axe"
+         ]
+      }
+   }
+}

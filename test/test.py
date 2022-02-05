@@ -35,6 +35,35 @@ def prepare_output_directory():
 
     os.mkdir('./out')
 
+class TestStandaloneTextureFiles(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+    
+    def test_terrain_texture_file(self):
+        terrain_texture = self.rp.terrain_texture_file
+        texture_definition = terrain_texture.texture_definitions[0]
+
+        self.assertEqual(len(terrain_texture.texture_definitions), 5)
+        self.assertEqual(texture_definition.textures[0], 'textures/blocks/planks_acacia')
+
+        texture_definition = terrain_texture.get_texture_definition('anvil_base')
+
+        self.assertEqual(texture_definition.textures[0], 'textures/blocks/anvil_base')
+        self.assertEqual(len(texture_definition.textures), 4)
+
+
+    def test_item_texture_file(self):
+        item_texture_file = self.rp.item_texture_file
+        texture_definition = item_texture_file.texture_definitions[0]
+
+        self.assertEqual(len(item_texture_file.texture_definitions), 5)
+        self.assertEqual(texture_definition.textures[0], 'textures/items/apple')
+    
+        texture_definition = item_texture_file.get_texture_definition('axe')
+
+        self.assertEqual(texture_definition.textures[0], 'textures/items/wood_axe')
+        self.assertEqual(len(texture_definition.textures), 6)
+
 class TestRenderControllers(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -230,6 +259,8 @@ class TestDirty(unittest.TestCase):
         self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
         self.command = self.function.commands[0]
         self.component = self.entity.get_component('minecraft:type_family')
+        self.item_texture_file = self.rp.item_texture_file
+        self.texture_definition = self.item_texture_file.get_texture_definition('axe')
 
     def assert_dirties(attribute):
         """
@@ -284,6 +315,20 @@ class TestDirty(unittest.TestCase):
     @assert_dirties('entity')
     def test_subresource_id(self):
         self.component.id = 'new_component_name'
+
+    @assert_dirties('item_texture_file')
+    @assert_dirties('texture_definition')
+    def test_texture_definition(self):
+        self.texture_definition.shortname = 'new_shortname'
+
+    @assert_dirties('item_texture_file')
+    @assert_dirties('texture_definition')
+    def test_texture_definition_textures(self):
+        self.texture_definition.textures.append('new_texture')
+
+    @assert_dirties('item_texture_file')
+    def test_add(self):
+        self.item_texture_file.add_texture_definition('new_definition', [])
 
 class TestParticle(unittest.TestCase):
     def setUp(self) -> None:
