@@ -1187,14 +1187,14 @@ class ResourcePack(Pack):
         self.__sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__sounds]
         return self.__sounds
 
-    def get_sounds(self, search_path: str, trim_extension: bool = True) -> list[str]:
+    def get_sounds(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
         """
         Returns a list of all child sounds of the searchpath, relative to the pack root. 
         Search path should not include 'sounds'.
 
         You may optionally trim the extension from the returned paths.
 
-        Example: rp.get_textures("entities", trim_extension=True)
+        Example: rp.get_sounds("entities", trim_extension=True)
         """
         sounds = []
         glob_pattern = os.path.join(self.input_path, "sounds", search_path) + "/**/*."
@@ -1220,7 +1220,7 @@ class ResourcePack(Pack):
         self.__textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__textures]
         return self.__textures
     
-    def get_textures(self, search_path: str, trim_extension: bool = True) -> list[str]:
+    def get_textures(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
         """
         Returns a list of all child textures of the searchpath, relative to the pack root. 
         Search path should not include 'textures'.
