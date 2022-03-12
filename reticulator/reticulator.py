@@ -1187,14 +1187,14 @@ class ResourcePack(Pack):
         self.__sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__sounds]
         return self.__sounds
 
-    def get_sounds(self, search_path: str, trim_extension: bool = True) -> list[str]:
+    def get_sounds(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
         """
         Returns a list of all child sounds of the searchpath, relative to the pack root. 
         Search path should not include 'sounds'.
 
         You may optionally trim the extension from the returned paths.
 
-        Example: rp.get_textures("entities", trim_extension=True)
+        Example: rp.get_sounds("entities", trim_extension=True)
         """
         sounds = []
         glob_pattern = os.path.join(self.input_path, "sounds", search_path) + "/**/*."
@@ -1220,7 +1220,7 @@ class ResourcePack(Pack):
         self.__textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__textures]
         return self.__textures
     
-    def get_textures(self, search_path: str, trim_extension: bool = True) -> list[str]:
+    def get_textures(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
         """
         Returns a list of all child textures of the searchpath, relative to the pack root. 
         Search path should not include 'textures'.
@@ -2198,18 +2198,21 @@ class EntityFileBP(JsonFileResource):
                 return child
         raise AssetNotFoundError(id)
 
-    def create_component_group(self, name: str, data: dict) -> ComponentGroup:
+    def add_component_group(self, name: str, data: dict) -> ComponentGroup:
         self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
-        new_object = ComponentGroup(self, "minecraft:entity/component_groups/." + name, data)
+        new_object = ComponentGroup(data = data, parent = self, json_path = "minecraft:entity/component_groups/" + name)
         self.__component_groups.append(new_object)
         return new_object
 
-    def create_component(self, name: str, data: dict) -> Component:
+    def add_component(self, name: str, data: dict) -> Component:
+        """
+        Adds a component to the entity components
+        """
         self.set_jsonpath("minecraft:entity/components/" + name, data)
-        new_object = Component(self, "minecraft:entity/components/." + name, data)
+        new_object = Component(data = data, parent = self, json_path="minecraft:entity/components/" + name)
         self.__components.append(new_object)
         return new_object
-
+            
 
 class FogFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -2454,15 +2457,17 @@ class ComponentGroup(JsonSubResource):
                 return component
         raise AssetNotFoundError(f"Component called '{id}' could not be found in group '{self.id}'.")
 
-    def create_component(self, name: str, data: dict) -> Component:
-        self.set_jsonpath("" + name, data)
-        new_object = Component(self, "." + name, data)
+    def add_component(self, name: str, data: dict) -> Component:
+        """
+        Adds component to the component group
+        """
+        self.set_jsonpath(name, data)
+        new_object = Component(data = data, parent = self, json_path = name)
         self.__components.append(new_object)
         return new_object
 
-
 class Component(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None , component_group: ComponentGroup = None) -> None:
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
 

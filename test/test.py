@@ -444,10 +444,37 @@ class TestEntityFileBP(unittest.TestCase):
         self.entity = self.bp.get_entity('minecraft:dolphin')
 
     def test_component_groups(self):
-        self.assertEqual(len(self.entity.component_groups), 7)
         group = self.entity.get_component_group('dolphin_adult')
+
+        self.assertEqual(len(self.entity.component_groups), 7)
         self.assertEqual(group.id, 'dolphin_adult')
         self.assertEqual(len(group.components), 4)
+
+    def test_add_component_groups(self):
+        component_group_data = { "minecraft:damage" : { "value" : 1 } }
+        component_group = self.entity.add_component_group('group:one',component_group_data)
+        self.assertEqual(component_group.id, 'group:one')
+
+        saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
+
+        saved_entity = saved_bp.get_entity('minecraft:dolphin')
+        new_group = saved_entity.get_component_group('group:one')
+        self.assertEqual(new_group.id, 'group:one')
+        self.assertEqual(len(new_group.components), 1)
+
+    def test_add_component(self):
+        # Tests before
+        self.assertEqual(len(self.entity.components), 29)
+
+        # Add to components
+        component_data = { "value" : 1 }
+        self.entity.add_component("minecraft:damage", component_data)
+
+        saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
+
+        saved_entity = saved_bp.get_entity('minecraft:dolphin')
+        self.assertEqual(len(saved_entity.components), 30)
+        
 
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:

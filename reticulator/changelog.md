@@ -55,3 +55,8 @@
   - volumetric_density_components
   - volumetric_media_coefficients
   - Getters for all component types
+
+# 0.0.17-beta
+ - Replaced EntityFileBP.create_component_group with EntityFileBP.add_component_group
+ - Replaced EntityFileBP.create_component with EntityFileBP.add_component
+ - Replaced ComponentGroup.create_component with ComponentGroup.add_component
