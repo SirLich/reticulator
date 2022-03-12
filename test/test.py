@@ -522,17 +522,16 @@ class TestDeletion(unittest.TestCase):
         with self.assertRaises(AssetNotFoundError):
             component = entity.get_component('minecraft:type_family')
     
-    @unittest.skip("Not implemented yet")
     def test_list_subresource_deletion(self):
         model = self.rp.get_model('geometry.dolphin')
+
         self.assertEqual(len(model.bones), 9)
         bone = model.get_bone('bristle2')
-
-        print("Deleting: " + bone.json_path)
         bone.delete()
+        self.assertEqual(len(model.bones), 9)
 
         # This fails, because the list can no longer be accessed
-        saved_bp, saved_rp = save_and_return_packs(rp=self.rp)
+        # saved_bp, saved_rp = save_and_return_packs(rp=self.rp)
 
         # bone = model.get_bone('bristle2')
 
@@ -621,6 +620,18 @@ class TestJsonPathAccess(unittest.TestCase):
         # Delete string
         entity.delete_jsonpath('minecraft:entity/description/identifier')
         self.assertFalse(entity.jsonpath_exists('minecraft:entity/description/identifier'))
+
+        # Delete list
+        path = 'minecraft:entity/events/minecraft:entity_spawned/randomize/0'
+
+        # A complex test. Probably should be made clearer. 
+        # The idea is that deleting a list from a jsonpath should set it to 
+        # None, which the dpath lib apparently does by default
+        self.assertEqual(len(entity.get_jsonpath('minecraft:entity/events/minecraft:entity_spawned/randomize')), 2)
+        self.assertNotEqual(entity.get_jsonpath(path), None)
+        entity.delete_jsonpath(path)
+        self.assertEqual(entity.get_jsonpath(path), None)
+        self.assertEqual(len(entity.get_jsonpath('minecraft:entity/events/minecraft:entity_spawned/randomize')), 2)
 
         # Delete complex structure
         entity.delete_jsonpath('minecraft:entity')

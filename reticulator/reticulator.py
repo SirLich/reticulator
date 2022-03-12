@@ -185,6 +185,7 @@ class Resource():
         self.pack: Union[ResourcePack, BehaviorPack] = pack
         self.file = file
         self._dirty = False
+        self._deleted = False
 
         # Private
         self._resources: Resource = []
@@ -280,8 +281,6 @@ class FileResource(Resource):
         if file_path:
             self.file_name = os.path.basename(file_path)
 
-        self._mark_for_deletion: bool = False
-
     def _delete(self):
         """
         Internal implementation of file deletion.
@@ -289,7 +288,7 @@ class FileResource(Resource):
         Marking for deletion allows us to delete the file during saving,
         without effecting the file system during normal operation.
         """
-        self._mark_for_deletion = True
+        self._deleted = True
 
 class JsonResource(Resource):
     """
@@ -367,6 +366,7 @@ class JsonResource(Resource):
 
         # Otherwise, set the value
         dpath.util.new(self.data, json_path, insert_value)
+        
 
     def get_jsonpath(self, json_path, default=NO_ARGUMENT):
         """
@@ -471,14 +471,15 @@ class JsonFileResource(FileResource, JsonResource):
         create_nested_directory(save_path)
 
         # If the file has been marked for deletion, delete it
-        if self._mark_for_deletion:
+        if self._deleted:
             # If the paths are the same, delete the file, otherwise
             # we can just pass
             if smart_compare(self.pack.input_path, self.pack.output_path):
                 os.remove(save_path)
         else:
             with open(save_path, "w+") as file_head:
-                return json.dump(self.data, file_head, indent=2, ensure_ascii=False)
+                clean_data = {k: v for k, v in self.data.items() if v is not None}
+                return json.dump(clean_data, file_head, indent=2, ensure_ascii=False)
 
 
 class JsonSubResource(JsonResource):
@@ -491,15 +492,15 @@ class JsonSubResource(JsonResource):
         # The parent of the sub-resource is the asset of type Resource
         # which owns this sub-resource. For example a Component is owned by
         # either an EntityFileBP, or a ComponentGroup.
-        self.parent = parent
+        self.parent: JsonResource = parent
 
         # The jsonpath is the location within the parent resource, where
         # this sub-resource is stored.
-        self._json_path = json_path
+        self._json_path: str = json_path
 
         # The original path location needs to be stored, for the purpose
         # of renaming or moving the sub-resource.
-        self._original_json_path = json_path
+        self._original_json_path: str = json_path
 
         # Register self into parent, so that it can be found by the parent
         # during saving, etc.
@@ -567,11 +568,12 @@ class JsonSubResource(JsonResource):
         # If the id was updated, we need to serialize into a new location.
         # This implies first deleting the old location, and then creating
         # a new one.
-        if self.json_path != self._original_json_path:
-            self.parent.delete_jsonpath(self._original_json_path)
-            self.parent.set_jsonpath(self.json_path, self.data)
-        else:
-            self.parent.set_jsonpath(self.json_path, self.data)
+        if not self._deleted:
+            if self.json_path != self._original_json_path:
+                self.parent.delete_jsonpath(self._original_json_path)
+                self.parent.set_jsonpath(self.json_path, self.data)
+            else:
+                self.parent.set_jsonpath(self.json_path, self.data)
 
         self._dirty = False
 
@@ -579,8 +581,13 @@ class JsonSubResource(JsonResource):
         """
         Deletes itself from parent, by removing the data at the jsonpath
         location.
+
+        If it is a list, it must only set itself to None. The actual
+        deletion will take place during saving.
         """
         self.parent.dirty = True
+        self.parent._resources.remove(self)
+        self._deleted = True
         self.parent.delete_jsonpath(self.json_path)
 
 
