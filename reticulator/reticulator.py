@@ -2198,22 +2198,25 @@ class EntityFileBP(JsonFileResource):
                 return child
         raise AssetNotFoundError(id)
 
-    def create_component_group(self, name: str, data: dict) -> ComponentGroup:
+    def add_component_group(self, name: str, data: dict) -> ComponentGroup:
         self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
-        new_object = ComponentGroup(data, self, "minecraft:entity/component_groups/" + name)
+        new_object = ComponentGroup(data = data, parent = self, json_path = "minecraft:entity/component_groups/" + name)
         self.__component_groups.append(new_object)
         return new_object
 
-    def create_component(self, name: str, data: dict, component_group: str = None) -> Component:
+    def add_component(self, name: str, data: dict, component_group: str = None) -> Component:
+        """
+        Adds a component to the components.
+        If component_group is provided, it will add it to the component_group if it exists
+        """
         if component_group == None:
             self.set_jsonpath("minecraft:entity/components/" + name, data)
-            new_object = Component(data, self, "minecraft:entity/components/" + name, component_group)
+            new_object = Component(data = data, parent = self, json_path="minecraft:entity/components/" + name)
             self.__components.append(new_object)
             return new_object
         else:
-            self.set_jsonpath("minecraft:entity/component_groups/" + component_group + '/' + name, data)
-            new_object = Component(data, self, "minecraft:entity/component_groups/" + component_group + "/" + name, component_group)
-            self.__components.append(new_object)
+            group = self.get_component_group(component_group)
+            new_object = group.add_component(name, data)
             return new_object
             
 
@@ -2460,15 +2463,17 @@ class ComponentGroup(JsonSubResource):
                 return component
         raise AssetNotFoundError(f"Component called '{id}' could not be found in group '{self.id}'.")
 
-    def create_component(self, name: str, data: dict) -> Component:
-        self.set_jsonpath("" + name, data)
-        new_object = Component(self, "." + name, data)
+    def add_component(self, name: str, data: dict) -> Component:
+        """
+        Adds component to the component group
+        """
+        self.set_jsonpath(name, data)
+        new_object = Component(data = data, parent = self, json_path = name)
         self.__components.append(new_object)
         return new_object
 
-
 class Component(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None , component_group: ComponentGroup = None) -> None:
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
         super().__init__(data=data, parent=parent, json_path=json_path)
 
 
