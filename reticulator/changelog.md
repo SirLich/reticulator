@@ -60,3 +60,10 @@
  - Replaced EntityFileBP.create_component_group with EntityFileBP.add_component_group
  - Replaced EntityFileBP.create_component with EntityFileBP.add_component
  - Replaced ComponentGroup.create_component with ComponentGroup.add_component
+ - Rewrote deletion logic, including support for list-deletes
+ - Added context manager for resources
+ - Pack saving io internal restructuring:
+    - Rename `Project.set_save_locations` to `Project.set_output_directory`
+    - Remove `Pack.set_save_locations` (just call `Pack.output_directory = x`)
+    - Rename `input_path` to `input_directory`
+    - Rename `output_path` to `output_directory`

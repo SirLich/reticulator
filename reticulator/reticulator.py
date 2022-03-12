@@ -176,7 +176,7 @@ class Resource():
      - reference to the Pack (could be blank, if floating resource)
      - reference to the File (could be a few links up the chain)
      - dirty status
-     - abstract ability to save
+     - abstract ability to save, including context manager support
      - list of children resources
     """
 
@@ -189,6 +189,18 @@ class Resource():
 
         # Private
         self._resources: Resource = []
+
+    def __enter__(self) -> Resource:
+        """
+        Context manager support.
+        """
+        return self
+
+    def __exit__(self, type, value, traceback):
+        """
+        Context manager support. Will save the resource on exit.
+        """
+        self.save()
 
     @property
     def dirty(self):
@@ -238,14 +250,16 @@ class Resource():
 
         # Only dirty assets can be saved, unless forced.
         if self.dirty or force:
-            self.dirty = False
-
             # Save all children first
             for resource in self._resources:
                 resource.save(force=force)
 
             # Now, save this resource
             self._save()
+
+            # Mark as clean
+            self.dirty = False
+
 
     def delete(self):
         """
@@ -467,14 +481,14 @@ class JsonFileResource(FileResource, JsonResource):
             raise InvalidJsonError(file_path)
 
     def _save(self):
-        save_path = os.path.join(self.pack.output_path, self.file_path)
+        save_path = os.path.join(self.pack.output_directory, self.file_path)
         create_nested_directory(save_path)
 
         # If the file has been marked for deletion, delete it
         if self._deleted:
             # If the paths are the same, delete the file, otherwise
             # we can just pass
-            if smart_compare(self.pack.input_path, self.pack.output_path):
+            if smart_compare(self.pack.input_path, self.pack.output_directory):
                 os.remove(save_path)
         else:
             with open(save_path, "w+") as file_head:
@@ -818,7 +832,7 @@ class FunctionFile(FileResource):
         return self.__commands
     
     def _save(self) -> None:
-        path = os.path.join(self.pack.output_path, self.file_path)
+        path = os.path.join(self.pack.output_directory, self.file_path)
         create_nested_directory(path)
         with open(path, 'w', encoding='utf-8') as file:
             for command in self.commands:
@@ -878,7 +892,7 @@ class LanguageFile(FileResource):
         return True
 
     def _save(self):
-        path = os.path.join(self.pack.output_path, self.file_path)
+        path = os.path.join(self.pack.output_directory, self.file_path)
         create_nested_directory(path)
         with open(path, 'w', encoding='utf-8') as file:
             for translation in self.translations:
@@ -906,24 +920,18 @@ class Pack():
     """
     A pack is a holder class for many file assets. 
     """
-    def __init__(self, input_path: str, project : Project = None):
+    def __init__(self, input_directory: str, project : Project = None):
         self.resources = []
         self._language_files = []
         self._project = project
 
         # The input path is the path to the folder containing the pack.
-        self.input_path: str = input_path
+        self.input_path: str = input_directory
 
         # The output path is the path to the output directory, where this
         # pack will be saved. This is the same as the input path, unless
         # explicitely saved.
-        self.output_path: str = input_path
-
-    def set_save_locations(self, save_location: str) -> None:
-        """
-        Sets the output path for this pack.
-        """
-        self.output_path = save_location
+        self.output_directory: str = input_directory
 
     @cached_property
     def project(self) -> Project:
@@ -985,7 +993,7 @@ class Project():
         self.__resource_pack = None
         self.__behavior_pack : BehaviorPack = None
     
-    def set_save_locations(self, save_location: str) -> None:
+    def set_output_directory(self, save_location: str) -> None:
         """
         Sets the save location of the RP and the BP, based on the folder
         name from their input path.
@@ -996,8 +1004,8 @@ class Project():
         If you need finer control, use the 'set_save_location' method on the 
         ResourcePack and BehaviorPack instead.
         """
-        self.resource_pack.output_path = save_location + "/" + os.path.dirname(self.resource_pack.input_path)
-        self.behavior_pack.output_path = save_location + "/" + os.path.dirname(self.behavior_pack.input_path)
+        self.resource_pack.output_directory = save_location + "/" + os.path.dirname(self.resource_pack.input_path)
+        self.behavior_pack.output_directory = save_location + "/" + os.path.dirname(self.behavior_pack.input_path)
 
     def get_packs(self) -> Tuple[behavior_pack, resource_pack]:
         """

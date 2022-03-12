@@ -8,7 +8,9 @@ sys.path.insert(0, '../reticulator')
 from reticulator import *
 
 def get_packs() -> Tuple[BehaviorPack, ResourcePack]:
-    return Project('./content/bp/', './content/rp/').get_packs()
+    project = Project('./content/bp/', './content/rp/')
+    project.set_output_directory('out')
+    return project.get_packs()
 
 def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, force: bool = False):
     # Prepare folder location
@@ -16,11 +18,11 @@ def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, forc
 
     # Save the old packs
     if rp is not None:
-        rp.output_path = './out/rp/'
+        rp.output_directory = './out/rp/'
         rp.save(force=force)
     
     if bp is not None:
-        bp.output_path = './out/bp/'
+        bp.output_directory = './out/bp/'
         bp.save(force=force)
 
     # Return the saved packs packs
@@ -34,6 +36,20 @@ def prepare_output_directory():
         pass
 
     os.mkdir('./out')
+
+class TestContextManager(unittest.TestCase):
+    def test_context_manager(self):
+        bp, rp = get_packs()
+
+        with rp.get_entity('minecraft:dolphin') as dolphin:
+            dolphin.set_jsonpath('test', 'test')
+
+            # Dirty before save
+            self.assertTrue(dolphin.dirty)
+
+        # No longer dirty after implicit save (from context manager)
+        self.assertFalse(dolphin.dirty)
+
 
 
 class TestFogs(unittest.TestCase):
