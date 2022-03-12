@@ -2204,20 +2204,14 @@ class EntityFileBP(JsonFileResource):
         self.__component_groups.append(new_object)
         return new_object
 
-    def add_component(self, name: str, data: dict, component_group: str = None) -> Component:
+    def add_component(self, name: str, data: dict) -> Component:
         """
-        Adds a component to the components.
-        If component_group is provided, it will add it to the component_group if it exists
+        Adds a component to the entity components
         """
-        if component_group == None:
-            self.set_jsonpath("minecraft:entity/components/" + name, data)
-            new_object = Component(data = data, parent = self, json_path="minecraft:entity/components/" + name)
-            self.__components.append(new_object)
-            return new_object
-        else:
-            group = self.get_component_group(component_group)
-            new_object = group.add_component(name, data)
-            return new_object
+        self.set_jsonpath("minecraft:entity/components/" + name, data)
+        new_object = Component(data = data, parent = self, json_path="minecraft:entity/components/" + name)
+        self.__components.append(new_object)
+        return new_object
             
 
 class FogFile(JsonFileResource):
