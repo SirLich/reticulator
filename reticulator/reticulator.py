@@ -2200,16 +2200,22 @@ class EntityFileBP(JsonFileResource):
 
     def create_component_group(self, name: str, data: dict) -> ComponentGroup:
         self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
-        new_object = ComponentGroup(self, "minecraft:entity/component_groups/." + name, data)
+        new_object = ComponentGroup(data, self, "minecraft:entity/component_groups/" + name)
         self.__component_groups.append(new_object)
         return new_object
 
-    def create_component(self, name: str, data: dict) -> Component:
-        self.set_jsonpath("minecraft:entity/components/" + name, data)
-        new_object = Component(self, "minecraft:entity/components/." + name, data)
-        self.__components.append(new_object)
-        return new_object
-
+    def create_component(self, name: str, data: dict, component_group: str = None) -> Component:
+        if component_group == None:
+            self.set_jsonpath("minecraft:entity/components/" + name, data)
+            new_object = Component(data, self, "minecraft:entity/components/" + name, component_group)
+            self.__components.append(new_object)
+            return new_object
+        else:
+            self.set_jsonpath("minecraft:entity/component_groups/" + component_group + '/' + name, data)
+            new_object = Component(data, self, "minecraft:entity/component_groups/" + component_group + "/" + name, component_group)
+            self.__components.append(new_object)
+            return new_object
+            
 
 class FogFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
