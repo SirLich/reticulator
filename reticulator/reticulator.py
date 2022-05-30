@@ -780,7 +780,7 @@ class FormatVersion:
             elements = version.split('.')
         else:
             # Change to suitable error
-            raise TypeError()
+            raise FormatVersionError('Invalid type')
 
         # Pack with extra data if it's missing
         for i in range(3 - len(elements)):
@@ -798,6 +798,7 @@ class FormatVersion:
         return self.major == other.major and self.minor == other.minor and self.patch == other.patch
 
     def __gt__(self, other):
+        other = FormatVersion(other)
         if self.major > other.major:
             return True
         elif self.major < other.major:
