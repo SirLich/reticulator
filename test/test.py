@@ -714,5 +714,41 @@ class TestJsonPathAccess(unittest.TestCase):
         with self.assertRaises(AssetNotFoundError):
             dolphin.get_jsonpath('dne')
 
+class TestFormatVersion(unittest.TestCase):
+    """
+    Tests format version getters, errors and comparison
+    """
+
+    def setUp(self) -> None:
+        self.project = Project('./content/bp/', './content/rp/')
+        self.bp = self.project.behavior_pack
+        self.rp = self.project.resource_pack
+        self.entity = self.bp.get_entity('minecraft:dolphin')
+        self.recipe = self.bp.get_recipe('minecraft:acacia_boat')
+        self.loot_table = self.bp.get_loot_table('loot_tables/entities/dolphin.json')
+
+    def test_format_version(self):
+        # Test getters
+        self.assertEqual(self.entity.format_version, '1.16.0')
+        self.assertEqual(self.recipe.format_version, '1.12.0')
+        with self.assertRaises(FormatVersionError):
+            self.loot_table.format_version
+
+        # Test Initaliser
+        self.assertTrue(FormatVersion('1') == '1.0.0.0')
+        self.assertTrue(FormatVersion('12.4') == FormatVersion(FormatVersion('12.4.0.3.4')))
+
+        # Test comparison
+        self.assertTrue(self.entity.format_version > self.recipe.format_version)
+
+        # Test setter
+        self.entity.format_version = '1.17.0'
+        self.assertEqual(self.entity.format_version, FormatVersion('1.17'))
+
+        with self.assertRaises(AttributeError):
+            self.loot_table.format_version = '1.14'
+
+        
+
 if __name__ == '__main__':
     unittest.main()

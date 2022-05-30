@@ -67,3 +67,4 @@
     - Remove `Pack.set_save_locations` (just call `Pack.output_directory = x`)
     - Rename `input_path` to `input_directory`
     - Rename `output_path` to `output_directory`
+ - Added FormatVersion class

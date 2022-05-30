@@ -89,6 +89,12 @@ class AmbiguousAssetError(ReticulatorException):
     """
 
 
+class FormatVersionError(ReticulatorException):
+    """
+    Called when a format version does not exist for a file
+    """
+
+
 class NotifyDict(dict):
     """
     A notify dictionary is a dictionary that can notify its parent when its been
@@ -449,6 +455,14 @@ class JsonFileResource(FileResource, JsonResource):
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
 
+    @property
+    def format_version(self) -> FormatVersion:
+        return FormatVersion(self.get_jsonpath("format_version"))
+    
+    @format_version.setter
+    def format_version(self, format_version):
+        return self.set_jsonpath("format_version", str(FormatVersion(format_version)))
+
     def load_json(self, local_path: str) -> dict:
         """
         Loads json from file. `local_path` paramater is local to the projects
@@ -755,6 +769,52 @@ class Translation:
         self.value = value
         self.comment = comment
 
+class FormatVersion:
+    def __init__(self, version) -> None:
+        if isinstance(version, FormatVersion):
+            self.major = version.major
+            self.minor = version.minor
+            self.patch = version.patch
+            return
+        elif isinstance(version, str):
+            elements = version.split('.')
+        else:
+            # Change to suitable error
+            raise TypeError()
+
+        # Pack with extra data if it's missing
+        for i in range(3 - len(elements)):
+            elements.append('0')
+        
+        self.major = int(elements[0])
+        self.minor = int(elements[1])
+        self.patch = int(elements[2])
+
+    def __repr__(self) -> str:
+        return f'{self.major}.{self.minor}.{self.patch}'
+        
+    def __eq__(self, other):
+        other = FormatVersion(other)
+        return self.major == other.major and self.minor == other.minor and self.patch == other.patch
+
+    def __gt__(self, other):
+        if self.major > other.major:
+            return True
+        elif self.major < other.major:
+            return False
+
+        if self.minor > other.minor:
+            return True
+        elif self.minor < other.minor:
+            return False
+
+        if self.patch > other.patch:
+            return True
+        elif self.patch < other.patch:
+            return False
+        
+        return self != other
+
 class Command(Resource):
     """
     A command is a wrapper around a string, which represents a single command
@@ -799,7 +859,6 @@ class Command(Resource):
 
     def __repr__(self):
         return f"Function: '{self.data}'"
-
 
 class FunctionFile(FileResource):
     """
@@ -1659,14 +1718,6 @@ class ParticleFile(JsonFileResource):
         self.__events: JsonSubResource = []
 
     @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
-    @property
     def identifier(self):
         return self.get_jsonpath("particle_effect/description/identifier")
     
@@ -1714,14 +1765,6 @@ class AttachableFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
 
     @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
-    @property
     def identifier(self):
         return self.get_jsonpath("minecraft:attachable/description/identifier")
     
@@ -1742,27 +1785,12 @@ class FeatureRuleFile(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:feature_rules/description/identifier", identifier)
 
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
 
 class RenderControllerFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__render_controllers = []
-    
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
+
 
     
     @cached_property
@@ -1784,14 +1812,6 @@ class AnimationControllerFileBP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
 
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
         for path, data in self.get_data_at("animation_controllers"):
@@ -1812,14 +1832,6 @@ class AnimationControllerFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animation_controllers = []
-
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
 
     @cached_property
     def animation_controllers(self) -> list[AnimationControllerRP]:
@@ -1846,14 +1858,6 @@ class SpawnRuleFile(JsonFileResource):
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:spawn_rules/description/identifier", identifier)
 
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
 class LootTableFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -1865,6 +1869,10 @@ class LootTableFile(JsonFileResource):
             self.__pools.append(LootTablePool(parent = self, json_path = path, data = data))
         return self.__pools
 
+    @property
+    def format_version(self) -> FormatVersion:
+        raise FormatVersionError('File does not have a format version!')        
+
 
 class SoundDefinitionsFile(JsonFileResource):
     """
@@ -1873,14 +1881,7 @@ class SoundDefinitionsFile(JsonFileResource):
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data, file_path, pack)
-    
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
+
 
 
 class BlocksFile(JsonFileResource):
@@ -1940,6 +1941,10 @@ class SoundsFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
 
+    @property
+    def format_version(self) -> FormatVersion:
+        raise FormatVersionError('File does not have a format version!')
+
 
 class ItemFileRP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1953,14 +1958,6 @@ class ItemFileRP(JsonFileResource):
     @identifier.setter
     def identifier(self, identifier):
         return self.set_jsonpath("minecraft:item/description/identifier", identifier)
-
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
 
     @cached_property
     def components(self) -> list[JsonSubResource]:
@@ -2140,14 +2137,6 @@ class AnimationFileRP(JsonFileResource):
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__animations: AnimationRP = []
 
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
     @cached_property
     def animations(self) -> list[AnimationRP]:
         for path, data in self.get_data_at("animations"):
@@ -2161,14 +2150,6 @@ class EntityFileBP(JsonFileResource):
         self.__component_groups = []
         self.__components = []
         self.__events = []
-
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
 
     @property
     def identifier(self):
@@ -2237,19 +2218,11 @@ class FogFile(JsonFileResource):
         self.__volumetric_media_coefficients: list[Component] = []
 
     @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
-
-    @property
     def identifier(self):
         return self.get_jsonpath("minecraft:fog_settings/description/identifier")
     
-    @format_version.setter
-    def format_version(self, identifier):
+    @identifier.setter
+    def identifier(self, identifier):
         return self.set_jsonpath("minecraft:fog_settings/description/identifier", identifier)
 
     @cached_property
@@ -2292,14 +2265,6 @@ class ModelFile(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
         self.__models = []
-
-    @property
-    def format_version(self):
-        return self.get_jsonpath("format_version")
-    
-    @format_version.setter
-    def format_version(self, format_version):
-        return self.set_jsonpath("format_version", format_version)
 
     @cached_property
     def models(self) -> list[Model]:
