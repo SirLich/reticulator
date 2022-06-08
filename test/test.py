@@ -735,8 +735,8 @@ class TestFormatVersion(unittest.TestCase):
             self.loot_table.format_version
 
         # Test Initaliser
-        self.assertTrue(FormatVersion('1') == '1.0.0.0')
-        self.assertTrue(FormatVersion('12.4') == FormatVersion(FormatVersion('12.4.0.3.4')))
+        self.assertEqual(FormatVersion('1'), '1.0.0.0')
+        self.assertEqual(FormatVersion('12.4'), FormatVersion(FormatVersion('12.4.0.3.4')))
 
         # Test comparison
         self.assertTrue(self.entity.format_version > self.recipe.format_version)
