@@ -4,6 +4,7 @@ import re
 import os
 import json
 import glob
+import functools #Adds information for functions handled by decorator
 
 from pathlib import Path
 from functools import cached_property
@@ -14,6 +15,33 @@ import dpath.util
 NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
+
+# Decorator
+def add_subresource(cls ,jsonpath: str, attribrute):
+    def decorator_add_subresource(func):
+        @functools.wraps(func)
+        def wrapper_add_subresource(self, *args):
+            if len(args) == 2 and isinstance(args[0], str):
+                name = args[0]
+                data = args[1]
+
+                self.set_jsonpath(jsonpath + name, data)
+                object = cls(data=data, parent=self, json_path=jsonpath + name)
+                #getattr(self, attribrute).append(object)
+                return object
+
+            elif len(args) == 1 and isinstance(args[0], cls):
+                object = args[0]
+
+                self.set_jsonpath(object.json_path, object.data)
+                object.parent = self
+                getattr(self, attribrute).append(object)
+                return object
+            else:
+                # TODO: Appauling errror message need to fix
+                raise TypeError('Accepts either name and data or instance of class.')
+        return wrapper_add_subresource
+    return decorator_add_subresource
 
 # Methods
 def create_nested_directory(path: str):
@@ -1069,6 +1097,116 @@ class BehaviorPack(Pack):
         raise AssetNotFoundError(f"BlockFileBP with identifier '{identifier}' could not be found.")
 
 
+## Behavior Pack SubResources
+class Component(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+
+
+class ComponentGroup(JsonSubResource):
+    """
+    A component group is a collection of components in an EntityFileBP.
+    """
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+        self.__components: Component = []
+
+    @cached_property
+    def components(self) -> list[Component]:
+        for path, data in self.get_data_at("**"):
+            self.__components.append(Component(parent = self, json_path = path, data = data))
+        return self.__components
+
+    def get_component(self, id:str) -> JsonSubResource:
+        """
+        Gets a component from this group, by its ID.
+        """
+        for component in self.components:
+            if smart_compare(component.id, id):
+                return component
+        raise AssetNotFoundError(f"Component called '{id}' could not be found in group '{self.id}'.")
+
+    def add_component(self, name: str, data: dict, overwrite: bool = False) -> Component:
+        """
+        Adds component to the component group
+        """
+        self.set_jsonpath(name, data, overwrite)
+        new_object = Component(data = data, parent = self, json_path = name)
+        self.__components.append(new_object)
+        return new_object
+
+
+class Event(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+        
+        self.__groups_to_add = []
+        self.__groups_to_remove = []
+
+    @cached_property
+    def groups_to_add(self) -> list[ComponentGroup]:
+        for path, data in self.get_data_at("add/component_groups"):
+            self.__groups_to_add.append(ComponentGroup(parent = self, json_path = path, data = data))
+        return self.__groups_to_add
+    
+    @cached_property
+    def groups_to_remove(self) -> list[ComponentGroup]:
+        for path, data in self.get_data_at("remove/component_groups"):
+            self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
+        return self.__groups_to_remove
+
+
+class LootTablePool(JsonSubResource):
+    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
+        super().__init__(data=data, parent=parent, json_path=json_path)
+
+
+class Command(Resource):
+    """
+    A command is a wrapper around a string, which represents a single command
+    in a function file.
+
+    To use this class, you can access the 'data' property, and treat it like
+    a string.
+    """
+    def __init__(self, command: str, file: FileResource = None, pack: Pack = None) -> None:
+        super().__init__(file=file, pack=pack)
+
+        # The 'data' is the actual command, which is stored as a string.
+        self._data: str = command
+
+    @property
+    def data(self):
+        return self._data
+    
+    @data.setter
+    def data(self, data):
+        self._data = data
+        self.dirty = True
+
+    @property
+    def dirty(self):
+        return self._dirty
+
+    @dirty.setter
+    def dirty(self, dirty):
+        """
+        When a command is marked as dirty, it must propagate this to the
+        file, so that the file can be marked as dirty.
+        """
+        self._dirty = dirty
+        self.file.dirty = dirty
+
+    def is_comment(self):
+        return self.data.startswith("#")
+
+    def __str__(self):
+        return self.data
+
+    def __repr__(self):
+        return f"Function: '{self.data}'"
+
+
 ## Behavior Pack File Resources
 class AnimationControllerFileBP(JsonFileResource):
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
@@ -1170,14 +1308,22 @@ class EntityFileBP(JsonFileResource):
                 return child
         raise AssetNotFoundError(id)
 
-    def add_component_group(self, name: str, data: dict) -> ComponentGroup:
+    @add_subresource(cls=ComponentGroup, jsonpath="minecraft:entity/component_groups/", attribrute='component_groups')
+    def add_component_group(self, *args) -> ComponentGroup:
         """
-        Adds a component group to the entity components, and returns it. 
+        Adds component group to the entity components and returns it.
+        Takes name and data or ComponentGroup class
         """
-        self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
-        new_object = ComponentGroup(data = data, parent = self, json_path = "minecraft:entity/component_groups/" + name)
-        self.__component_groups.append(new_object)
-        return new_object
+        pass
+
+    # def add_component_group(self, name: str, data: dict) -> ComponentGroup:
+    #     """
+    #     Adds a component group to the entity components, and returns it. 
+    #     """
+    #     self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
+    #     new_object = ComponentGroup(data = data, parent = self, json_path = "minecraft:entity/component_groups/" + name)
+    #     self.__component_groups.append(new_object)
+    #     return new_object
 
     def add_component(self, name: str, data: dict) -> Component:
         """
@@ -1329,115 +1475,6 @@ class SpawnRuleFile(JsonFileResource):
 #     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
 #         super().__init__(data = data, file_path = file_path, pack = pack)
 #         self.functions = []
-
-## Behavior Pack SubResources
-class Component(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-
-
-class ComponentGroup(JsonSubResource):
-    """
-    A component group is a collection of components in an EntityFileBP.
-    """
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        self.__components: Component = []
-
-    @cached_property
-    def components(self) -> list[Component]:
-        for path, data in self.get_data_at("**"):
-            self.__components.append(Component(parent = self, json_path = path, data = data))
-        return self.__components
-
-    def get_component(self, id:str) -> JsonSubResource:
-        """
-        Gets a component from this group, by its ID.
-        """
-        for component in self.components:
-            if smart_compare(component.id, id):
-                return component
-        raise AssetNotFoundError(f"Component called '{id}' could not be found in group '{self.id}'.")
-
-    def add_component(self, name: str, data: dict, overwrite: bool = False) -> Component:
-        """
-        Adds component to the component group
-        """
-        self.set_jsonpath(name, data, overwrite)
-        new_object = Component(data = data, parent = self, json_path = name)
-        self.__components.append(new_object)
-        return new_object
-
-
-class Event(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        
-        self.__groups_to_add = []
-        self.__groups_to_remove = []
-
-    @cached_property
-    def groups_to_add(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("add/component_groups"):
-            self.__groups_to_add.append(ComponentGroup(parent = self, json_path = path, data = data))
-        return self.__groups_to_add
-    
-    @cached_property
-    def groups_to_remove(self) -> list[ComponentGroup]:
-        for path, data in self.get_data_at("remove/component_groups"):
-            self.__groups_to_remove.append(ComponentGroup(parent = self, json_path = path, data = data))
-        return self.__groups_to_remove
-
-
-class LootTablePool(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-
-
-class Command(Resource):
-    """
-    A command is a wrapper around a string, which represents a single command
-    in a function file.
-
-    To use this class, you can access the 'data' property, and treat it like
-    a string.
-    """
-    def __init__(self, command: str, file: FileResource = None, pack: Pack = None) -> None:
-        super().__init__(file=file, pack=pack)
-
-        # The 'data' is the actual command, which is stored as a string.
-        self._data: str = command
-
-    @property
-    def data(self):
-        return self._data
-    
-    @data.setter
-    def data(self, data):
-        self._data = data
-        self.dirty = True
-
-    @property
-    def dirty(self):
-        return self._dirty
-
-    @dirty.setter
-    def dirty(self, dirty):
-        """
-        When a command is marked as dirty, it must propagate this to the
-        file, so that the file can be marked as dirty.
-        """
-        self._dirty = dirty
-        self.file.dirty = dirty
-
-    def is_comment(self):
-        return self.data.startswith("#")
-
-    def __str__(self):
-        return self.data
-
-    def __repr__(self):
-        return f"Function: '{self.data}'"
 
 
 

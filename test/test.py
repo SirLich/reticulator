@@ -467,9 +467,17 @@ class TestEntityFileBP(unittest.TestCase):
         self.assertEqual(len(group.components), 4)
 
     def test_add_component_groups(self):
+        # Test adding component group by name and data
         component_group_data = { "minecraft:damage" : { "value" : 1 } }
         component_group = self.entity.add_component_group('group:one',component_group_data)
         self.assertEqual(component_group.id, 'group:one')
+        self.assertEqual(len(self.entity.component_groups), 8)
+
+        # Test adding component group by class
+        group = ComponentGroup({}, self.entity, 'minecraft:entity/component_groups/group:two')
+        added_group = self.entity.add_component_group(group)
+        self.assertEqual(added_group.id, 'group:two')
+        self.assertEqual(len(self.entity.component_groups), 9)
 
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
 
