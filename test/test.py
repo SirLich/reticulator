@@ -323,20 +323,12 @@ class TestDirty(unittest.TestCase):
         self.function.commands[0].data = 'new command'
 
     @assert_dirties('entity')
-    def test_dict_list_insert(self):
-        self.entity.data['new_key'] = []
-
-    @assert_dirties('entity')
     def test_property(self):
         self.entity.identifier = 'bob'
 
     @assert_dirties('entity')
     def test_jsonpath(self):
         self.entity.set_jsonpath('new_key', {})
-
-    @assert_dirties('entity')
-    def test_data(self):
-        self.entity.data['new_key'] = []
 
     @assert_dirties('component')
     @assert_dirties('entity')

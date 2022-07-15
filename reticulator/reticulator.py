@@ -16,6 +16,18 @@ NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
 
+def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
+    """
+    Converts a dict or list to a notify structure.
+    """
+    if isinstance(data, dict):
+        return NotifyDict(data, owner=parent)
+
+    if isinstance(data, list):
+        return NotifyList(data, owner=parent)
+
+    return data
+
 # Decorator
 def add_subresource(cls ,jsonpath: str, attribrute):
     def decorator_add_subresource(func):
@@ -57,18 +69,6 @@ def save_json(file_path, data):
     create_nested_directory(file_path)
     with open(file_path, "w+") as file_head:
         return json.dump(data, file_head, indent=2, ensure_ascii=False)
-
-def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
-    """
-    Converts a dict or list to a notify structure.
-    """
-    if isinstance(data, dict):
-        return NotifyDict(data, owner=parent)
-
-    if isinstance(data, list):
-        return NotifyList(data, owner=parent)
-
-    return data
 
 def smart_compare(a, b) -> bool:
     """
@@ -120,6 +120,84 @@ class FormatVersionError(ReticulatorException):
 
 
 # Base Classes
+
+class NotifyDict(dict):
+    """
+    A notify dictionary is a dictionary that can notify its parent when its been
+    edited.
+    """
+    def __init__(self, *args, owner: Resource = None, **kwargs):
+        self._owner = owner
+
+        if len(args) > 0:
+            for key, value in args[0].items():
+                args[0][key] = convert_to_notify_structure(value, self._owner)
+        super().__init__(*args, **kwargs)
+
+    def get_item(self, attr):
+        try:
+            return self.__getitem__(attr)
+        except Exception:
+            return None
+    
+    def __delitem__(self, v) -> None:
+        if(self._owner != None):
+            self._owner.dirty = True
+        return super().__delitem__(v)
+
+    def __setitem__(self, attr, value):
+        value = convert_to_notify_structure(value, self._owner)
+
+        if self.get_item(attr) != value:
+            if(self._owner != None):
+                self._owner.dirty = True
+
+        super().__setitem__(attr, value)
+
+class NotifyList(list):
+    """
+    A notify list is a list which can notify its owner when it has
+    changed.
+    """
+    def __init__(self, *args, owner: Resource = None, **kwargs):
+        self._owner = owner
+
+        if len(args) > 0:
+            for i in range(len(args[0])):
+                args[0][i] = convert_to_notify_structure(args[0][i], self._owner)
+
+        super().__init__(*args, **kwargs)
+
+    def get_item(self, attr):
+        try:
+            return self.__getitem__(attr)
+        except Exception:
+            return None
+    
+    def __delitem__(self, v) -> None:
+        if(self._owner != None):
+            self._owner.dirty = True
+        return super().__delitem__(v)
+    
+    def append(self, v):
+        if(self._owner != None):
+            self._owner.dirty = True
+        super().append(v)
+
+    def extend(self, v):
+        if(self._owner != None):
+            self._owner.dirty = True
+        super().extend(v)
+
+    def __setitem__(self, attr, value):
+        value = convert_to_notify_structure(value, self._owner)
+
+        if self.__getitem__(attr) != value:
+            if(self._owner != None):
+                self._owner.dirty = True
+        
+        super().__setitem__(attr, value)
+
 class Pack():
     """
     A pack is a holder class for many file assets. 
@@ -241,85 +319,6 @@ class Project():
         """
         self.__behavior_pack.save(force=force)
         self.__resource_pack.save(force=force)
-
-
-class NotifyDict(dict):
-    """
-    A notify dictionary is a dictionary that can notify its parent when its been
-    edited.
-    """
-    def __init__(self, *args, owner: Resource = None, **kwargs):
-        self._owner = owner
-
-        if len(args) > 0:
-            for key, value in args[0].items():
-                args[0][key] = convert_to_notify_structure(value, self._owner)
-        super().__init__(*args, **kwargs)
-
-    def get_item(self, attr):
-        try:
-            return self.__getitem__(attr)
-        except Exception:
-            return None
-    
-    def __delitem__(self, v) -> None:
-        if(self._owner != None):
-            self._owner.dirty = True
-        return super().__delitem__(v)
-
-    def __setitem__(self, attr, value):
-        value = convert_to_notify_structure(value, self._owner)
-
-        if self.get_item(attr) != value:
-            if(self._owner != None):
-                self._owner.dirty = True
-
-        super().__setitem__(attr, value)
-
-class NotifyList(list):
-    """
-    A notify list is a list which can notify its owner when it has
-    changed.
-    """
-    def __init__(self, *args, owner: Resource = None, **kwargs):
-        self._owner = owner
-
-        if len(args) > 0:
-            for i in range(len(args[0])):
-                args[0][i] = convert_to_notify_structure(args[0][i], self._owner)
-
-        super().__init__(*args, **kwargs)
-
-    def get_item(self, attr):
-        try:
-            return self.__getitem__(attr)
-        except Exception:
-            return None
-    
-    def __delitem__(self, v) -> None:
-        if(self._owner != None):
-            self._owner.dirty = True
-        return super().__delitem__(v)
-    
-    def append(self, v):
-        if(self._owner != None):
-            self._owner.dirty = True
-        super().append(v)
-
-    def extend(self, v):
-        if(self._owner != None):
-            self._owner.dirty = True
-        super().extend(v)
-
-    def __setitem__(self, attr, value):
-        value = convert_to_notify_structure(value, self._owner)
-
-        if self.__getitem__(attr) != value:
-            if(self._owner != None):
-                self._owner.dirty = True
-        
-        super().__setitem__(attr, value)
-
 class Resource():
     """
     The top resource in the inheritance chain.
@@ -468,7 +467,7 @@ class JsonResource(Resource):
 
     def __init__(self, data: dict = None, file: FileResource = None, pack: Pack = None) -> None:
         super().__init__(file=file, pack=pack)
-        self._data = convert_to_notify_structure(data, self)
+        self._data = data
     
     @property
     def data(self):
@@ -477,7 +476,7 @@ class JsonResource(Resource):
     @data.setter
     def data(self, data):
         self.dirty = True
-        self._data = convert_to_notify_structure(data, self)
+        self._data = data
 
     def _save(self):
         raise NotImplementedError("This json resource cannot be saved.")
@@ -504,6 +503,7 @@ class JsonResource(Resource):
         """
         path_exists = self.jsonpath_exists(json_path)
         if path_exists:
+            self.dirty = True
             dpath.util.delete(self.data, json_path)
 
     def pop_jsonpath(self, json_path, default=NO_ARGUMENT) \
@@ -514,6 +514,7 @@ class JsonResource(Resource):
 
         data = self.get_jsonpath(json_path, default=default)
         self.delete_jsonpath(json_path)
+        self.dirty = True
         return data
 
     def set_jsonpath(self, json_path:str, insert_value:any, overwrite:bool=True):
@@ -531,6 +532,7 @@ class JsonResource(Resource):
             return
 
         # Otherwise, set the value
+        self.dirty = True
         dpath.util.new(self.data, json_path, insert_value)
         
 
@@ -702,9 +704,9 @@ class JsonFileResource(FileResource, JsonResource):
         # resource. This allows assets to be created from scratch, whilst
         # still having an associated file location.
         if data is not None:
-            self.data = convert_to_notify_structure(data, self)
+            self.data = data
         else:
-            self.data = convert_to_notify_structure(self.load_json(self.file_path), self)
+            self.data = self.load_json(self.file_path)
 
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
@@ -1392,7 +1394,7 @@ class FunctionFile(FileResource):
                 command = line.strip()
                 if command:
                     self.__commands.append(Command(command, file=self, pack=self.pack))
-        self.__commands = NotifyList(self.__commands, owner=self)
+        self.__commands = convert_to_notify_structure(self.__commands, self)
         return self.__commands
     
     def _save(self) -> None:
@@ -2541,9 +2543,9 @@ class TextureFileDouble(JsonSubResource):
         self.textures = data.get("textures", [])
         if not isinstance(self.textures, list):
             self.textures = [self.textures]
-
+        
         self.textures = convert_to_notify_structure(self.textures, self)
-
+        
     @property
     def shortname(self):
         return self.id
