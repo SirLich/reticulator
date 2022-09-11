@@ -386,6 +386,23 @@ class TestParticle(unittest.TestCase):
         self.assertEqual(component.get_jsonpath('num_particles'), 20)
         self.assertEqual(component.data['num_particles'], 20)
 
+class TestAnimationRP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_animation_file(self):
+        self.assertEqual(1, len(self.rp.animation_files))
+        self.assertTrue(self.rp.get_animation_file('animations/dolphin.animation.json'))
+
+        animation_file = self.rp.get_animation_file('animations/dolphin.animation.json')
+        
+        self.assertEqual(1, len(animation_file.animations))
+        self.assertTrue(animation_file.get_animation('animation.dolphin.move'))
+
+
+
+
+
 class TestAnimationTriple(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
@@ -731,7 +748,7 @@ class TestFormatVersion(unittest.TestCase):
         # Test getters
         self.assertEqual(self.entity.format_version, '1.16.0')
         self.assertEqual(self.recipe.format_version, '1.12.0')
-        with self.assertRaises(FormatVersionError):
+        with self.assertRaises(AttributeError):
             self.loot_table.format_version
 
         # Test Initaliser
@@ -745,8 +762,6 @@ class TestFormatVersion(unittest.TestCase):
         self.entity.format_version = '1.17.0'
         self.assertEqual(self.entity.format_version, FormatVersion('1.17'))
 
-        with self.assertRaises(AttributeError):
-            self.loot_table.format_version = '1.14'
 
         
 
