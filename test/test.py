@@ -323,20 +323,12 @@ class TestDirty(unittest.TestCase):
         self.function.commands[0].data = 'new command'
 
     @assert_dirties('entity')
-    def test_dict_list_insert(self):
-        self.entity.data['new_key'] = []
-
-    @assert_dirties('entity')
     def test_property(self):
         self.entity.identifier = 'bob'
 
     @assert_dirties('entity')
     def test_jsonpath(self):
         self.entity.set_jsonpath('new_key', {})
-
-    @assert_dirties('entity')
-    def test_data(self):
-        self.entity.data['new_key'] = []
 
     @assert_dirties('component')
     @assert_dirties('entity')
@@ -393,6 +385,23 @@ class TestParticle(unittest.TestCase):
         self.assertEqual(component.id, 'minecraft:emitter_rate_instant')
         self.assertEqual(component.get_jsonpath('num_particles'), 20)
         self.assertEqual(component.data['num_particles'], 20)
+
+class TestAnimationRP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+
+    def test_animation_file(self):
+        self.assertEqual(1, len(self.rp.animation_files))
+        self.assertTrue(self.rp.get_animation_file('animations/dolphin.animation.json'))
+
+        animation_file = self.rp.get_animation_file('animations/dolphin.animation.json')
+        
+        self.assertEqual(1, len(animation_file.animations))
+        self.assertTrue(animation_file.get_animation('animation.dolphin.move'))
+
+
+
+
 
 class TestAnimationTriple(unittest.TestCase):
     def setUp(self) -> None:
@@ -467,9 +476,17 @@ class TestEntityFileBP(unittest.TestCase):
         self.assertEqual(len(group.components), 4)
 
     def test_add_component_groups(self):
+        # Test adding component group by name and data
         component_group_data = { "minecraft:damage" : { "value" : 1 } }
         component_group = self.entity.add_component_group('group:one',component_group_data)
         self.assertEqual(component_group.id, 'group:one')
+        self.assertEqual(len(self.entity.component_groups), 8)
+
+        # Test adding component group by class
+        group = ComponentGroup({}, self.entity, 'minecraft:entity/component_groups/group:two')
+        added_group = self.entity.add_component_group(group)
+        self.assertEqual(added_group.id, 'group:two')
+        self.assertEqual(len(self.entity.component_groups), 9)
 
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
 
@@ -731,7 +748,7 @@ class TestFormatVersion(unittest.TestCase):
         # Test getters
         self.assertEqual(self.entity.format_version, '1.16.0')
         self.assertEqual(self.recipe.format_version, '1.12.0')
-        with self.assertRaises(FormatVersionError):
+        with self.assertRaises(AttributeError):
             self.loot_table.format_version
 
         # Test Initaliser
@@ -745,8 +762,6 @@ class TestFormatVersion(unittest.TestCase):
         self.entity.format_version = '1.17.0'
         self.assertEqual(self.entity.format_version, FormatVersion('1.17'))
 
-        with self.assertRaises(AttributeError):
-            self.loot_table.format_version = '1.14'
 
         
 
