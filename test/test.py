@@ -618,6 +618,20 @@ class TestLanguageFiles(unittest.TestCase):
         translation = language_file.get_translation('new_key2')
         self.assertEqual(translation.comment, 'Test')
 
+    def test_overwrite_translation(self):
+        language_file = self.rp.get_language_file('texts/es_ES.lang')
+        language_file.add_translation(Translation('accessibility.text.period', 'Test 1'),overwrite=True)
+        language_file.add_translation(Translation('accessibility.text.comma', 'Test 2'),overwrite=False)
+
+        saved_bp, saved_rp = save_and_return_packs(rp=self.rp)
+
+        language_file = saved_rp.get_language_file('texts/es_ES.lang')
+        self.assertEqual(len(language_file.translations), 3)
+        translation_1 = language_file.get_translation('accessibility.text.period')
+        translation_2 = language_file.get_translation('accessibility.text.comma')
+        self.assertEqual(translation_1.value,'Test 1')
+        self.assertEqual(translation_2.value,'Coma')
+
 class TestJsonPathAccess(unittest.TestCase):
     """
     Test various jsonpath access methods.
