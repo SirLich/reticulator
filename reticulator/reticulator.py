@@ -16,6 +16,7 @@ NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
 
+
 def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
     """
     Converts a dict or list to a notify structure.
@@ -94,6 +95,59 @@ def class_property(attribute: str, jsonpath: str):
 
         return cls
     return inner
+
+
+@cached_property
+def models(self) -> list[Model]:
+    for file in self.model_files:
+        for child in file.models:
+            self.__models.append(child)
+    return self.__models
+
+def json_child_resource(*, file_attribute: str, resource_attribute : str):
+    """
+    Special case, for looping over all children FILES to access
+    RESOURCES. 
+    
+    Classic example is doing `rp.animations` instead of looping over all
+    animation files and then painfully getting animations from there.
+    """
+
+    def decorator(func):
+
+        @property
+        @functools.wraps(func)
+        def wrapper(self):
+
+            sub_resources = []
+            for file_resource in getattr(self, file_attribute):
+                for sub_resource in getattr(file_resource, resource_attribute):
+                    sub_resources.append(sub_resource)
+            return sub_resources
+
+        return wrapper
+    return decorator
+
+def json_resource(*, cls: JsonFileResource, filepath : str, extension = '.json'):
+    """Inserts implementation for JsonFileResource"""
+
+    attribute = cls.__name__
+
+    def decorator(func):
+        
+        @cached_property
+        @functools.wraps(func)
+        def wrapper(self):
+            setattr(self, attribute, [])
+            base_directory = os.path.join(self.input_path, filepath)
+
+            for local_path in glob.glob(base_directory + "/**/*" + extension, recursive=True):
+                local_path = os.path.relpath(local_path, self.input_path)
+
+                getattr(self, attribute).append(cls(file_path = local_path, pack = self))
+            return getattr(self, attribute)
+        return wrapper
+    return decorator
 
 def sub_resource(*, cls: JsonSubResource, jsonpath : str):
     """
@@ -462,7 +516,7 @@ class Resource():
         Context manager support. Will save the resource on exit.
         """
         self.save()
-
+    
     @property
     def dirty(self):
         """
@@ -533,6 +587,7 @@ class Resource():
 
         # Then delete self
         self._delete()
+
 
 class FileResource(Resource):
     """
@@ -739,7 +794,7 @@ class JsonSubResource(JsonResource):
         self.json_path = self.json_path.rsplit("/", maxsplit=1)[0] + "/" + id
 
     def __repr__(self):
-        return f"{self.__class__.__name__}: {self.id}"
+        return f"'{self.__class__.__name__}: {self.id}'"
 
     def __str__(self):
         """
@@ -820,6 +875,10 @@ class JsonFileResource(FileResource, JsonResource):
 
         # Init json resource, which relies on the new data attribute
         JsonResource.__init__(self, data=self.data, file=self, pack=pack)
+
+    def __repr__(self):
+        return f"'{self.__class__.__name__}: {self.file_path}'"
+
 
     def load_json(self, local_path: str) -> dict:
         """
@@ -1548,401 +1607,51 @@ class SpawnRuleFile(JsonFileResource):
 
 ### RESOURCE PACK
 
-class ResourcePack(Pack):
-    def __init__(self, input_path: str, project: Project = None):
-        super().__init__(input_path, project=project)
-        self.__particles: list[ParticleFile] = []
-        self.__attachables: list[AttachableFileRP] = []
-        self.__animation_controller_files: list[AnimationControllerFileRP] = []
-        self.__animation_files: list[AnimationControllerFileRP] = []
-        self.__entities: list[EntityFileRP] = []
-        self.__model_files: list[ModelFile] = []
-        self.__models: list[Model] = []
-        self.__render_controller_files: list[RenderControllerFile] = []
-        self.__items: list[ItemFileRP] = []
-        self.__sounds: list[str] = []
-        self.__textures: list[str] = []
-        self.__material_files: list[MaterialFile] = []
-        self.__materials: list[Material] = []
-        self.__fogs: list[FogFile] = []
-        self.__sounds_file: SoundsFile = None
-        self.__sound_definitions_file: SoundDefinitionsFile = None
-        self.__terrain_texture_file: StandAloneTextureFile = None
-        self.__item_texture_file: StandAloneTextureFile = None
-        self.__flipbook_textures_file: FlipbookTexturesFile = None
-        self.__blocks_file: BlocksFile = None
-        self.__biomes_client_file: BiomesClientFile = None
+@format_version()
+@identifier("particle_effect/description/identifier")
+class ParticleFile(JsonFileResource):
+    """
+    ParticleFile is a JsonFileResource which represents a particle file.
+    """
 
-    # === Cached Properties ===
-    @cached_property
-    def particles(self) -> list[ParticleFile]:
-        base_directory = os.path.join(self.input_path, "particles")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__particles.append(ParticleFile(file_path = local_path, pack = self))
-            
-        return self.__particles
+    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
+        super().__init__(data = data, file_path = file_path, pack = pack)
+        self.__components: JsonSubResource = []
+        self.__events: JsonSubResource = []
 
     @cached_property
-    def attachables(self) -> list[AttachableFileRP]:
-        base_directory = os.path.join(self.input_path, "attachables")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__attachables.append(AttachableFileRP(file_path = local_path, pack = self))
-            
-        return self.__attachables
-
-    @cached_property
-    def animation_controller_files(self) -> list[AnimationControllerFileRP]:
-        base_directory = os.path.join(self.input_path, "animation_controllers")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__animation_controller_files.append(AnimationControllerFileRP(file_path = local_path, pack = self))
-            
-        return self.__animation_controller_files
-
-    @cached_property
-    def animation_files(self) -> list[AnimationFileRP]:
-        base_directory = os.path.join(self.input_path, "animations")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__animation_files.append(AnimationFileRP(file_path = local_path, pack = self))
-            
-        return self.__animation_files
-
-    @cached_property
-    def material_files(self) -> list[MaterialFile]:
-        base_directory = os.path.join(self.input_path, "materials")
-        for local_path in glob.glob(base_directory + "/**/*.material", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__material_files.append(MaterialFile(file_path = local_path, pack = self))
-        return self.__material_files
-
-    @cached_property
-    def entities(self) -> list[EntityFileRP]:
-        base_directory = os.path.join(self.input_path, "entity")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__entities.append(EntityFileRP(file_path = local_path, pack = self))
-        return self.__entities
-
-    @cached_property
-    def fogs(self) -> list[FogFile]:
-        base_directory = os.path.join(self.input_path, "fogs")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__fogs.append(FogFile(file_path = local_path, pack = self))
-        return self.__fogs
-
-    @cached_property
-    def model_files(self) -> list[ModelFile]:
-        base_directory = os.path.join(self.input_path, "models")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__model_files.append(ModelFile(file_path = local_path, pack = self))
-            
-        return self.__model_files
-
-    @cached_property
-    def render_controller_files(self) -> list[RenderControllerFile]:
-        base_directory = os.path.join(self.input_path, "render_controllers")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__render_controller_files.append(RenderControllerFile(file_path = local_path, pack = self))
-            
-        return self.__render_controller_files
-
-    @cached_property
-    def items(self) -> list[ItemFileRP]:
-        base_directory = os.path.join(self.input_path, "items")
-        for local_path in glob.glob(base_directory + "/**/*.json", recursive=True):
-            local_path = os.path.relpath(local_path, self.input_path)
-            self.__items.append(ItemFileRP(file_path = local_path, pack = self))
-            
-        return self.__items
-
-    @cached_property
-    def animations(self) -> list[AnimationRP]:
-        children = []
-        for file in self.animation_files:
-            for child in file.animations:
-                children.append(child)
-        return children
-
-    @cached_property
-    def render_controllers(self) -> list[RenderController]:
-        children = []
-        for file in self.render_controller_files:
-            for child in file.render_controllers:
-                children.append(child)
-        return children
-
-    @cached_property
-    def animation_controllers(self) -> list[AnimationControllerRP]:
-        children = []
-        for file in self.animation_controller_files:
-            for child in file.animation_controllers:
-                children.append(child)
-        return children
-
-    @cached_property
-    def models(self) -> list[Model]:
-        for file in self.model_files:
-            for child in file.models:
-                self.__models.append(child)
-        return self.__models
-
-    @cached_property
-    def materials(self) -> list[Material]:
-        for file in self.material_files:
-            for child in file.materials:
-                self.__materials.append(child)
-        return self.__materials
-
-    @cached_property
-    def sounds(self) -> list[str]:
-        """
-        Returns a list of all sounds in the pack, relative to the pack root.
-        """
-        glob_pattern = os.path.join(self.input_path, "sounds") + "/**/*."
-        for extension in SOUND_EXTENSIONS:
-            self.__sounds.extend(glob.glob(glob_pattern + extension, recursive=True))
-
-        self.__sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__sounds]
-        return self.__sounds
-
-    def get_sounds(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
-        """
-        Returns a list of all child sounds of the searchpath, relative to the pack root. 
-        Search path should not include 'sounds'.
-
-        You may optionally trim the extension from the returned paths.
-
-        Example: rp.get_sounds("entities", trim_extension=True)
-        """
-        sounds = []
-        glob_pattern = os.path.join(self.input_path, "sounds", search_path) + "/**/*."
-        for extension in SOUND_EXTENSIONS:
-            sounds.extend(glob.glob(glob_pattern + extension, recursive=True))
-
-        sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in sounds]
-        if trim_extension:
-            sounds = [os.path.splitext(path)[0] for path in sounds]
-        return sounds
+    def components(self) -> list[JsonSubResource]:
+        for path, data in self.get_data_at("particle_effect/components"):
+            self.__components.append(JsonSubResource(parent = self, json_path = path, data = data))
+        return self.__components
     
     @cached_property
-    def textures(self) -> list[str]:
+    def events(self) -> list[JsonSubResource]:
+        for path, data in self.get_data_at("particle_effect/events"):
+            self.__events.append(JsonSubResource(parent = self, json_path = path, data = data))
+        return self.__events
+
+    def get_component(self, id:str) -> JsonSubResource:
         """
-        Returns a list of all textures in the pack, relative to the pack root.
+        Gets a specific JsonSubResource component from the particle.
 
-        Example: "textures/my_texture.png"
+        Example: particle.get_component('minecraft:particle_motion_dynamic')
         """
-        glob_pattern = os.path.join(self.input_path, "textures") + "/**/*."
-        for extension in TEXTURE_EXTENSIONS:
-            self.__textures.extend(glob.glob(glob_pattern + extension, recursive=True)) 
+        for component in self.components:
+            if smart_compare(component.id, id):
+                return component
+        raise AssetNotFoundError(f"Component called '{id}' could not be found on {self.identifier}.")
 
-        self.__textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__textures]
-        return self.__textures
-    
-    def get_textures(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
+    def get_event(self, id:str) -> JsonSubResource:
         """
-        Returns a list of all child textures of the searchpath, relative to the pack root. 
-        Search path should not include 'textures'.
+        Gets a specific JsonSubResource event from the particle.
 
-        You may optionally trim the extension from the returned paths.
-
-        Example: rp.get_textures("entities", trim_extension=True)
+        Example: particle.get_event('my_event')
         """
-        textures = []
-        glob_pattern = os.path.join(self.input_path, "textures", search_path) + "/**/*."
-        for extension in TEXTURE_EXTENSIONS:
-            textures.extend(glob.glob(glob_pattern + extension, recursive=True))
-
-        textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in textures]
-        if trim_extension:
-            textures = [os.path.splitext(path)[0] for path in textures]
-        return textures
-
-    # === Individual Files ===
-    @cached_property
-    def sounds_file(self) -> SoundsFile:
-        file_path = "sounds.json"
-        self.__sounds_file = SoundsFile(file_path = file_path, pack = self)
-        return self.__sounds_file
-
-    @cached_property
-    def sound_definitions_file(self) -> SoundDefinitionsFile:
-        file_path = os.path.join("sounds", "sound_definitions.json")
-        self.__sound_definitions_file = SoundDefinitionsFile(file_path = file_path, pack = self)
-        return self.__sound_definitions_file
-
-    @cached_property
-    def terrain_texture_file(self) -> StandAloneTextureFile:
-        file_path = os.path.join("textures", "terrain_texture.json")
-        self.__terrain_texture_file = StandAloneTextureFile(file_path = file_path, pack = self)
-        return self.__terrain_texture_file
-
-    @cached_property
-    def item_texture_file(self) -> StandAloneTextureFile:
-        file_path = os.path.join("textures", "item_texture.json")
-        self.__item_texture_file = StandAloneTextureFile(file_path = file_path, pack = self)
-        return self.__item_texture_file
-
-    @cached_property
-    def flipbook_textures_file(self) -> FlipbookTexturesFile:
-        file_path = os.path.join("textures", "flipbook_textures.json")
-        self.__flipbook_textures_file = FlipbookTexturesFile(file_path = file_path, pack = self)
-        return self.__flipbook_textures_file
-
-    @cached_property
-    def blocks_file(self) -> BlocksFile:
-        file_path = "blocks.json"
-        self.__blocks_file = BlocksFile(file_path = file_path, pack = self)
-        return self.__blocks_file
-
-    @cached_property
-    def biomes_client_file(self) -> BiomesClientFile:
-        file_path = "biomes_client.json"
-        self.__biomes_client_file = BiomesClientFile(file_path = file_path, pack = self)
-        return self.__biomes_client_file
-
-    # === Getters ===
-    def get_particle(self, identifier:str) -> ParticleFile:
-        for child in self.particles:
-            if smart_compare(child.identifier, identifier):
-                return child
-        raise AssetNotFoundError(identifier)
-
-    def get_fog(self, identifier:str) -> FogFile:
-        for fog in self.fogs:
-            if smart_compare(fog.identifier, identifier):
-                return fog
-        raise AssetNotFoundError(f"Fog with identifier {identifier} could not be found.")
-
-
-    def get_attachable(self, identifier:str) -> AttachableFileRP:
-        """
-        Gets an AttachableFileRP by its identifier.
-
-        Example: get_attachable("reticulator:sabatons")
-        """
-        for attachable in self.attachables:
-            if smart_compare(attachable.identifier, identifier):
-                return attachable
-        raise AssetNotFoundError(f"Attachable with identifier '{identifier}' not does not exist.")
-
-    def get_animation_controller_file(self, file_path:str) -> AnimationControllerFileRP:
-        """
-        Gets the AnimationControllerFileRP with the given path.
-
-        Example: get_animation_controller_file("example.json")
-        """
-        for acf in self.animation_controller_files:
-            if smart_compare(acf.file_path, file_path):
-                return acf
-        raise AssetNotFoundError(f"AnimationControllerFileRP with path '{file_path}' does not exist.")
-
-    def get_material_file(self, file_path:str) -> MaterialFile:
-        for material_file in self.material_files:
-            if smart_compare(material_file.file_path, file_path):
-                return material_file
-        raise AssetNotFoundError(f"MaterialFile with path '{file_path}' does not exist.")
-
-    def get_material(self, id:str) -> Material:
-        for file_child in self.material_files:
-            for child in file_child.materials:
-                if smart_compare(child.id, id):
-                    return child
-        raise AssetNotFoundError(f"MaterialRP with id '{id}' does not exist.")
-
-    def get_animation_file(self, file_path:str) -> AnimationFileRP:
-        """
-        Gets the AnimationFileRP with the given path.
-
-        Example: get_animation_file("example.json")
-        """
-        
-        for child in self.animation_files:
-            if smart_compare(child.file_path, file_path):
-                return child
-        raise AssetNotFoundError(f"AnimationFileRP with path '{file_path}' does not exist.")
-
-    def get_entity(self, identifier:str) -> EntityFileRP:
-        """
-        Gets the EntityFileRP with the given identifier.
-
-        Example: get_entity("reticulator:walrus")
-        """
-
-        for child in self.entities:
-            if smart_compare(child.identifier, identifier):
-                return child
-        raise AssetNotFoundError(f"Entity with identifier '{identifier}' does not exist.")
-
-    def get_model_file(self, file_path:str) -> ModelFile:
-        """
-        Gets the ModelFile with the given path.
-
-        Example: get_model_file("example.json")
-        """
-        
-        for model_file in self.model_files:
-            if smart_compare(model_file.file_path, file_path):
-                return model_file
-        raise AssetNotFoundError(f"ModelFile with path '{file_path}' does not exist.")
-
-    def get_render_controller_file(self, file_path:str) -> RenderControllerFile:
-        """
-        Gets the RenderControllerFile with the given path.
-        
-        Example: get_render_controller_file("example.json")
-        """
-
-        for child in self.render_controller_files:
-            if smart_compare(child.file_path, file_path):
-                return child
-        raise AssetNotFoundError(f"RenderControllerFile with path '{file_path}' does not exist.")
-
-    def get_animation(self, id:str) -> AnimationRP:
-        """
-        Gets the AnimationRP with the given id, by searching through all animation files.
-
-        Example: get_animation("animation.parrot.idle")
-        """
-
-        for file_child in self.animation_files:
-            for child in file_child.animations:
-                if smart_compare(child.id, id):
-                    return child
-        raise AssetNotFoundError(f"Animation with id '{id}' does not exist.")
-
-    def get_render_controller(self, id:str) -> RenderController:
-        """
-        Gets the RenderControllerRP with the given id, by searching through all render controller files.
-
-        Example: get_render_controller("controller.render.wooly_mammoth")
-        """
-
-        for file_child in self.render_controller_files:
-            for child in file_child.render_controllers:
-                if smart_compare(child.id, id):
-                    return child
-        raise AssetNotFoundError(f"RenderController with id '{id}' does not exist.")
-
-    def get_animation_controller(self, id:str) -> AnimationControllerRP:
-        for file_child in self.animation_controller_files:
-            for child in file_child.animation_controllers:
-                if smart_compare(child.id, id):
-                    return child
-        raise AssetNotFoundError(id)
-
-    def get_model(self, identifier:str) -> Model:
-        for file_child in self.model_files:
-            for child in file_child.models:
-                if smart_compare(child.identifier, identifier):
-                    return child
-        raise AssetNotFoundError(identifier)
-
+        for event in self.events:
+            if smart_compare(event.id, id):
+                return event
+        raise AssetNotFoundError(f"Event called '{id}' could not be found on {self.identifier}.")
 
 ## Resource Pack File Resources
 class AnimationControllerFileRP(JsonFileResource):
@@ -1967,10 +1676,6 @@ class AnimationControllerFileRP(JsonFileResource):
 
 
 class AnimationRP(JsonSubResource):
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
-        self.__bones = []
-
     @sub_resource(cls=JsonSubResource, jsonpath='bones')
     def bones(self) -> list[JsonSubResource]: pass
     
@@ -2207,50 +1912,6 @@ class ModelFile(JsonFileResource):
             self.__models.append(Model(parent = self, json_path = path, data = data))
         return self.__models
 
-@format_version()
-@identifier("particle_effect/description/identifier")
-class ParticleFile(JsonFileResource):
-    """
-    ParticleFile is a JsonFileResource which represents a particle file.
-    """
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
-        self.__components: JsonSubResource = []
-        self.__events: JsonSubResource = []
-
-    @cached_property
-    def components(self) -> list[JsonSubResource]:
-        for path, data in self.get_data_at("particle_effect/components"):
-            self.__components.append(JsonSubResource(parent = self, json_path = path, data = data))
-        return self.__components
-    
-    @cached_property
-    def events(self) -> list[JsonSubResource]:
-        for path, data in self.get_data_at("particle_effect/events"):
-            self.__events.append(JsonSubResource(parent = self, json_path = path, data = data))
-        return self.__events
-
-    def get_component(self, id:str) -> JsonSubResource:
-        """
-        Gets a specific JsonSubResource component from the particle.
-
-        Example: particle.get_component('minecraft:particle_motion_dynamic')
-        """
-        for component in self.components:
-            if smart_compare(component.id, id):
-                return component
-        raise AssetNotFoundError(f"Component called '{id}' could not be found on {self.identifier}.")
-
-    def get_event(self, id:str) -> JsonSubResource:
-        """
-        Gets a specific JsonSubResource event from the particle.
-
-        Example: particle.get_event('my_event')
-        """
-        for event in self.events:
-            if smart_compare(event.id, id):
-                return event
-        raise AssetNotFoundError(f"Event called '{id}' could not be found on {self.identifier}.")
 
 
 class RenderController(JsonSubResource):
@@ -2264,9 +1925,10 @@ class RenderController(JsonSubResource):
 
 @format_version()
 class RenderControllerFile(JsonFileResource):
+    format_version : FormatVersion
+
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
-        self.format_version : FormatVersion
 
     @sub_resource(cls=RenderController, jsonpath='render_controllers')
     def render_controllers(self) -> list[RenderController]: pass
@@ -2274,29 +1936,27 @@ class RenderControllerFile(JsonFileResource):
     @get_sub_resource('render_controllers', 'id')
     def get_render_controller(self, id: str) -> RenderController: pass
 
+
 @format_version()
 class SoundDefinitionsFile(JsonFileResource):
     """
     SoundsDefinitionFile is a class which represents the data stored in
     'rp/sounds/sound_definitions.json'
     """
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data, file_path, pack)
-        self.format_version : FormatVersion
+    
+    format_version : FormatVersion
+
 
 # TODO: Allow accessing child sounds here
 class SoundsFile(JsonFileResource):
     """
     SoundsFile is a class which represents the data stored in 'rp/sounds.json'
     """
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
-
 
 class StandAloneTextureFile(JsonFileResource):
     """
-    StandAloneTextureFile is a class which represents the data stored in 'rp/textures/*_texture.json'
-    style files.
+    StandAloneTextureFile is a class which represents the data stored in 'rp/textures/*_texture.json'.
+    Examples: 'item_texture.json', 'terrain_texture.json.
     """
     def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, file_path = file_path, pack = pack)
@@ -2593,3 +2253,338 @@ class TextureFileDouble(JsonSubResource):
         return {
             "textures": self.textures
         }
+
+
+class ResourcePack(Pack):
+    def __init__(self, input_path: str, project: Project = None):
+        super().__init__(input_path, project=project)
+        self.__attachables: list[AttachableFileRP] = []
+        self.__animation_controller_files: list[AnimationControllerFileRP] = []
+        self.__animation_files: list[AnimationControllerFileRP] = []
+        self.__entities: list[EntityFileRP] = []
+        self.__model_files: list[ModelFile] = []
+        self.__models: list[Model] = []
+        self.__render_controller_files: list[RenderControllerFile] = []
+        self.__items: list[ItemFileRP] = []
+        self.__sounds: list[str] = []
+        self.__textures: list[str] = []
+        self.__material_files: list[MaterialFile] = []
+        self.__materials: list[Material] = []
+        self.__fogs: list[FogFile] = []
+        self.__sounds_file: SoundsFile = None
+        self.__sound_definitions_file: SoundDefinitionsFile = None
+        self.__terrain_texture_file: StandAloneTextureFile = None
+        self.__item_texture_file: StandAloneTextureFile = None
+        self.__flipbook_textures_file: FlipbookTexturesFile = None
+        self.__blocks_file: BlocksFile = None
+        self.__biomes_client_file: BiomesClientFile = None
+
+    # === Cached Properties ===
+
+    @json_resource(cls=ParticleFile, filepath="particles")
+    def particles(self) -> list[ParticleFile]: pass
+
+    @json_resource(cls=AttachableFileRP, filepath="attachables")
+    def attachables(self) -> list[AttachableFileRP]: pass
+
+    @json_resource(cls=AnimationControllerFileRP, filepath="animation_controllers")
+    def animation_controller_files(self) -> list[AnimationControllerFileRP]: pass
+        
+    @json_resource(cls=AnimationFileRP, filepath="animations")
+    def animation_files(self) -> list[AnimationFileRP]: pass
+
+    @json_resource(cls=MaterialFile, filepath="materials", extension='material')
+    def material_files(self) -> list[MaterialFile]: pass
+
+    @json_resource(cls=EntityFileRP, filepath="entity")
+    def entities(self) -> list[EntityFileRP]: pass
+
+    @json_resource(cls=FogFile, filepath="fogs")
+    def fogs(self) -> list[FogFile]: pass
+
+    @json_resource(cls=ModelFile, filepath="models")
+    def model_files(self) -> list[ModelFile]: pass
+
+    @json_resource(cls=RenderControllerFile, filepath="render_controllers")
+    def render_controller_files(self) -> list[RenderControllerFile]: pass
+
+    @json_resource(cls=ItemFileRP, filepath="items")
+    def items(self) -> list[ItemFileRP]: pass
+
+    @cached_property
+    def animations(self) -> list[AnimationRP]:
+        children = []
+        for file in self.animation_files:
+            for child in file.animations:
+                children.append(child)
+        return children
+
+    @cached_property
+    def render_controllers(self) -> list[RenderController]:
+        children = []
+        for file in self.render_controller_files:
+            for child in file.render_controllers:
+                children.append(child)
+        return children
+
+    @cached_property
+    def animation_controllers(self) -> list[AnimationControllerRP]:
+        children = []
+        for file in self.animation_controller_files:
+            for child in file.animation_controllers:
+                children.append(child)
+        return children
+
+    @cached_property
+    def models(self) -> list[Model]:
+        for file in self.model_files:
+            for child in file.models:
+                self.__models.append(child)
+        return self.__models
+
+    @json_child_resource(file_attribute='material_files', resource_attribute='materials')
+    def materials(self) -> list[Material]: pass
+
+    @cached_property
+    def sounds(self) -> list[str]:
+        """
+        Returns a list of all sounds in the pack, relative to the pack root.
+        """
+        glob_pattern = os.path.join(self.input_path, "sounds") + "/**/*."
+        for extension in SOUND_EXTENSIONS:
+            self.__sounds.extend(glob.glob(glob_pattern + extension, recursive=True))
+
+        self.__sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__sounds]
+        return self.__sounds
+
+    def get_sounds(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
+        """
+        Returns a list of all child sounds of the searchpath, relative to the pack root. 
+        Search path should not include 'sounds'.
+
+        You may optionally trim the extension from the returned paths.
+
+        Example: rp.get_sounds("entities", trim_extension=True)
+        """
+        sounds = []
+        glob_pattern = os.path.join(self.input_path, "sounds", search_path) + "/**/*."
+        for extension in SOUND_EXTENSIONS:
+            sounds.extend(glob.glob(glob_pattern + extension, recursive=True))
+
+        sounds = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in sounds]
+        if trim_extension:
+            sounds = [os.path.splitext(path)[0] for path in sounds]
+        return sounds
+    
+    @cached_property
+    def textures(self) -> list[str]:
+        """
+        Returns a list of all textures in the pack, relative to the pack root.
+
+        Example: "textures/my_texture.png"
+        """
+        glob_pattern = os.path.join(self.input_path, "textures") + "/**/*."
+        for extension in TEXTURE_EXTENSIONS:
+            self.__textures.extend(glob.glob(glob_pattern + extension, recursive=True)) 
+
+        self.__textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in self.__textures]
+        return self.__textures
+    
+    def get_textures(self, search_path: str = "", trim_extension: bool = True) -> list[str]:
+        """
+        Returns a list of all child textures of the searchpath, relative to the pack root. 
+        Search path should not include 'textures'.
+
+        You may optionally trim the extension from the returned paths.
+
+        Example: rp.get_textures("entities", trim_extension=True)
+        """
+        textures = []
+        glob_pattern = os.path.join(self.input_path, "textures", search_path) + "/**/*."
+        for extension in TEXTURE_EXTENSIONS:
+            textures.extend(glob.glob(glob_pattern + extension, recursive=True))
+
+        textures = [os.path.relpath(path, self.input_path).replace(os.sep, '/') for path in textures]
+        if trim_extension:
+            textures = [os.path.splitext(path)[0] for path in textures]
+        return textures
+
+    # === Individual Files ===
+    @cached_property
+    def sounds_file(self) -> SoundsFile:
+        file_path = "sounds.json"
+        self.__sounds_file = SoundsFile(file_path = file_path, pack = self)
+        return self.__sounds_file
+
+    @cached_property
+    def sound_definitions_file(self) -> SoundDefinitionsFile:
+        file_path = os.path.join("sounds", "sound_definitions.json")
+        self.__sound_definitions_file = SoundDefinitionsFile(file_path = file_path, pack = self)
+        return self.__sound_definitions_file
+
+    @cached_property
+    def terrain_texture_file(self) -> StandAloneTextureFile:
+        file_path = os.path.join("textures", "terrain_texture.json")
+        self.__terrain_texture_file = StandAloneTextureFile(file_path = file_path, pack = self)
+        return self.__terrain_texture_file
+
+    @cached_property
+    def item_texture_file(self) -> StandAloneTextureFile:
+        file_path = os.path.join("textures", "item_texture.json")
+        self.__item_texture_file = StandAloneTextureFile(file_path = file_path, pack = self)
+        return self.__item_texture_file
+
+    @cached_property
+    def flipbook_textures_file(self) -> FlipbookTexturesFile:
+        file_path = os.path.join("textures", "flipbook_textures.json")
+        self.__flipbook_textures_file = FlipbookTexturesFile(file_path = file_path, pack = self)
+        return self.__flipbook_textures_file
+
+    @cached_property
+    def blocks_file(self) -> BlocksFile:
+        file_path = "blocks.json"
+        self.__blocks_file = BlocksFile(file_path = file_path, pack = self)
+        return self.__blocks_file
+
+    @cached_property
+    def biomes_client_file(self) -> BiomesClientFile:
+        file_path = "biomes_client.json"
+        self.__biomes_client_file = BiomesClientFile(file_path = file_path, pack = self)
+        return self.__biomes_client_file
+
+    # === Getters ===
+    def get_particle(self, identifier:str) -> ParticleFile:
+        for child in self.particles:
+            if smart_compare(child.identifier, identifier):
+                return child
+        raise AssetNotFoundError(identifier)
+
+    def get_fog(self, identifier:str) -> FogFile:
+        for fog in self.fogs:
+            if smart_compare(fog.identifier, identifier):
+                return fog
+        raise AssetNotFoundError(f"Fog with identifier {identifier} could not be found.")
+
+
+    def get_attachable(self, identifier:str) -> AttachableFileRP:
+        """
+        Gets an AttachableFileRP by its identifier.
+
+        Example: get_attachable("reticulator:sabatons")
+        """
+        for attachable in self.attachables:
+            if smart_compare(attachable.identifier, identifier):
+                return attachable
+        raise AssetNotFoundError(f"Attachable with identifier '{identifier}' not does not exist.")
+
+    def get_animation_controller_file(self, file_path:str) -> AnimationControllerFileRP:
+        """
+        Gets the AnimationControllerFileRP with the given path.
+
+        Example: get_animation_controller_file("example.json")
+        """
+        for acf in self.animation_controller_files:
+            if smart_compare(acf.file_path, file_path):
+                return acf
+        raise AssetNotFoundError(f"AnimationControllerFileRP with path '{file_path}' does not exist.")
+
+    def get_material_file(self, file_path:str) -> MaterialFile:
+        for material_file in self.material_files:
+            if smart_compare(material_file.file_path, file_path):
+                return material_file
+        raise AssetNotFoundError(f"MaterialFile with path '{file_path}' does not exist.")
+
+    def get_material(self, id:str) -> Material:
+        for file_child in self.material_files:
+            for child in file_child.materials:
+                if smart_compare(child.id, id):
+                    return child
+        raise AssetNotFoundError(f"MaterialRP with id '{id}' does not exist.")
+
+    def get_animation_file(self, file_path:str) -> AnimationFileRP:
+        """
+        Gets the AnimationFileRP with the given path.
+
+        Example: get_animation_file("example.json")
+        """
+        
+        for child in self.animation_files:
+            if smart_compare(child.file_path, file_path):
+                return child
+        raise AssetNotFoundError(f"AnimationFileRP with path '{file_path}' does not exist.")
+
+    def get_entity(self, identifier:str) -> EntityFileRP:
+        """
+        Gets the EntityFileRP with the given identifier.
+
+        Example: get_entity("reticulator:walrus")
+        """
+
+        for child in self.entities:
+            if smart_compare(child.identifier, identifier):
+                return child
+        raise AssetNotFoundError(f"Entity with identifier '{identifier}' does not exist.")
+
+    def get_model_file(self, file_path:str) -> ModelFile:
+        """
+        Gets the ModelFile with the given path.
+
+        Example: get_model_file("example.json")
+        """
+        
+        for model_file in self.model_files:
+            if smart_compare(model_file.file_path, file_path):
+                return model_file
+        raise AssetNotFoundError(f"ModelFile with path '{file_path}' does not exist.")
+
+    def get_render_controller_file(self, file_path:str) -> RenderControllerFile:
+        """
+        Gets the RenderControllerFile with the given path.
+        
+        Example: get_render_controller_file("example.json")
+        """
+
+        for child in self.render_controller_files:
+            if smart_compare(child.file_path, file_path):
+                return child
+        raise AssetNotFoundError(f"RenderControllerFile with path '{file_path}' does not exist.")
+
+    def get_animation(self, id:str) -> AnimationRP:
+        """
+        Gets the AnimationRP with the given id, by searching through all animation files.
+
+        Example: get_animation("animation.parrot.idle")
+        """
+
+        for file_child in self.animation_files:
+            for child in file_child.animations:
+                if smart_compare(child.id, id):
+                    return child
+        raise AssetNotFoundError(f"Animation with id '{id}' does not exist.")
+
+    def get_render_controller(self, id:str) -> RenderController:
+        """
+        Gets the RenderControllerRP with the given id, by searching through all render controller files.
+
+        Example: get_render_controller("controller.render.wooly_mammoth")
+        """
+
+        for file_child in self.render_controller_files:
+            for child in file_child.render_controllers:
+                if smart_compare(child.id, id):
+                    return child
+        raise AssetNotFoundError(f"RenderController with id '{id}' does not exist.")
+
+    def get_animation_controller(self, id:str) -> AnimationControllerRP:
+        for file_child in self.animation_controller_files:
+            for child in file_child.animation_controllers:
+                if smart_compare(child.id, id):
+                    return child
+        raise AssetNotFoundError(id)
+
+    def get_model(self, identifier:str) -> Model:
+        for file_child in self.model_files:
+            for child in file_child.models:
+                if smart_compare(child.identifier, identifier):
+                    return child
+        raise AssetNotFoundError(identifier)
