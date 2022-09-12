@@ -1,0 +1,22 @@
+{
+    "format_version": "1.10.0",
+    "animation_controllers": {
+        "controller.animation.test_3": {
+            "initial_state": "default",
+            "states": {
+                "default":{
+                    "animations": [
+                        "test"
+                    ],
+                    "on_entry": [],
+                    "on_exit": [],
+                    "transitions": [
+                        {
+                            "default": "query.is_sheared"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,49 @@
+{
+    "format_version": "1.10.0",
+    "animation_controllers": {
+        "controller.animation.test": {
+            "initial_state": "default",
+            "states": {
+                "default":{
+                    "animations": [
+                        "test"
+                    ],
+                    "on_entry": [],
+                    "on_exit": [],
+                    "transitions": [
+                        {
+                            "example": "query.is_sheared"
+                        }
+                    ]
+                },
+                "example":{
+                    "animations": [
+                        "anim.idle"
+                    ],
+                    "on_entry": [],
+                    "on_exit": [],
+                    "transitions": [
+                        {
+                            "default": "query.is_sheared"
+                        }
+                    ]
+                }
+            }
+        },
+        "controller.animation.test_2": {
+            "initial_state": "default",
+            "states": {
+                "default":{
+                    "animations": [
+                        "anim.idle"
+                    ],
+                    "transitions": [
+                        {
+                            "default": "query.is_sheared"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}
