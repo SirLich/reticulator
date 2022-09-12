@@ -317,29 +317,124 @@ class TestFormatVersion(unittest.TestCase):
 ## --------------------- ##
 ## Behavior Pack Classes ##
 ## --------------------- ##
-class TestAnimationBP(unittest.TestCase):pass
+##TODO: Need to add class
+class TestAnimationControllerBP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.animation_controller_file = self.bp.get_animation_controller_file('animation_controller/example.ac.json')
 
-class TestAnimationControllerBP(unittest.TestCase):pass
+    def test_animation_controller_files(self): 
+        self.assertEqual(len(self.bp.animation_controller_files), 2)
 
-class TestBlockFileBP(unittest.TestCase):pass
+        self.bp.get_animation_controller_file('animation_controller/example.ac.json')
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_animation_controller_file('animation_controller/dne.json')
 
-class TestBiomeFile(unittest.TestCase):pass
+    def test_animation_controllers(self): 
+        # From pack
+        self.assertEqual(len(self.bp.animation_controllers), 3)
+        # From animation controller file
+        self.assertEqual(len(self.animation_controller_file.animation_controllers), 2)
+
+        self.bp.get_animation_controller('controller.animation.test')
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_animation_controller('controller.animation.dne')
+
+    def test_add_animation_controller_file(self): pass
+
+    def test_add_animation_controller(self): pass
+
+##TODO: Need to add class
+class TestAnimationBP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.animation_file = self.bp.get_animation_file('animations/test.a.json')
+        
+    def test_animation_files(self):
+        self.assertEqual(len(self.bp.animation_files), 1)
+
+        self.bp.get_animation_file('animations/test.a.json')
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_animation_file('animations/dne.json')
+
+    def test_animations(self): 
+        # From pack
+        self.assertEqual(len(self.bp.animations), 1)
+        # From animation file
+        self.assertEqual(len(self.animation_file.animations), 1)
+
+        self.bp.get_animation('animations.test')
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_animation('animation.dne')       
+
+    def test_add_animation_file(self): pass
+
+    def test_add_animation(self): pass
+
+##TODO: Implement class
+
+class TestBlockFileBP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        self.block = self.bp.get_block('namespace:block')
+        
+    def test_blocks(self): 
+        self.assertEqual(len(self.bp.blocks), 1)
+
+        self.bp.get_block('namespace:block')
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_block('namespace:dne')
+     
+    def test_add_block(self): pass
+
+    def test_block_properties(self): 
+        self.assertEqual(self.block.format_version, "1.10.0")
+        self.assertEqual(self.block.identifier, "namespace:block")
+
+        self.assertEqual(len(self.block.components), 1)
+        self.block.get_component('minecraft:destroy_time')
+        with self.assertRaises(AssetNotFoundError):
+            self.block.get_component('minecraft:dne')
+
+        self.block.add_component("minecraft:display_name","Block")
+
+        saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
+
+        block = saved_bp.get_block('namespace:block')
+        self.assertEqual(len(block.components), 2)
+
+"""
+class TestBiomeFile(unittest.TestCase):
+    def test_biomes(self): pass
+
+    def test_get_biome_file(self): pass
+
+    def test_add_biome_file(self): pass
+"""
 
 class TestEntityFileBP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
+    
+    def test_entities(self): 
+        self.assertEqual(len(self.bp.entities), 2)
+        self.bp.get_entity('minecraft:dolphin')
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_entity('minecraft:dne')
 
-    def test_is_spawnable_property(self):
-        self.assertEqual(self.entity.is_spawnable,True)
+    def test_add_entity_bp(self): pass
+
+    def test_entity_bp_properties(self):
+        self.assertEqual(self.entity.identifier,'minecraft:dolphin')
 
     def test_component_groups(self):
-        group = self.entity.get_component_group('dolphin_adult')
-
         self.assertEqual(len(self.entity.component_groups), 7)
-        self.assertEqual(group.id, 'dolphin_adult')
-        self.assertEqual(len(group.components), 4)
 
+        self.group = self.entity.get_component_group('dolphin_adult')
+        self.assertEqual(self.group.id, 'dolphin_adult')
+        self.assertEqual(len(self.group.components), 4)
+        
     def test_add_component_groups(self):
         # Test adding component group by name and data
         component_group_data = { "minecraft:damage" : { "value" : 1 } }
@@ -372,17 +467,55 @@ class TestEntityFileBP(unittest.TestCase):
 
         saved_entity = saved_bp.get_entity('minecraft:dolphin')
         self.assertEqual(len(saved_entity.components), 30)
-  
-class TestFeatureFile(unittest.TestCase):pass
 
-class TestFeatureRuleFile(unittest.TestCase):pass
+    def test_events(self): pass
+
+    def test_get_event(self): pass
+
+    def test_add_event(self): pass
+
+class TestFeatureFile(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_feature_files(self): pass
+
+    def test_add_feature_file(self): pass
+
+class TestFeatureRuleFile(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_feature_rule_files(self): pass
+
+    def test_add_feature_rule_file(self): pass
 
 class TestFunctions(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
 
-    def test_count(self):
+    def test_functions(self): 
         self.assertEqual(len(self.bp.functions), 2)
+
+        # Getting function by path can take multiple path formats
+        self.assertTrue(self.bp.get_function('functions/kill_all_safe.mcfunction'))
+        self.assertTrue(self.bp.get_function('functions/teleport/home.mcfunction'))
+
+        with self.assertRaises(AssetNotFoundError):
+            self.bp.get_function('functions/no_function.mcfunction')
+
+    def test_add_function(self): pass
+
+    def test_commands(self): 
+        self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
+        self.assertEqual(len(self.function.commands), 4)
+
+    def test_set_command(self):
+        command = self.function.commands[0]
+
+        self.assertEqual(command.data, '# Remove all entities except players')
+        command.data = 'new'
+        self.assertEqual(command.data, 'new')
 
     def test_comment_stripping(self):
         """
@@ -396,38 +529,28 @@ class TestFunctions(unittest.TestCase):
         # With stripping on
         self.bp.functions[0].strip_comments() # Strips 2 comments from the first function
         self.assertEqual(len(self.bp.functions[0].commands), 2) 
-    
-    def test_getting_function(self):
-        # Getting function by path can take multiple path formats
-        self.assertTrue(self.bp.get_function('functions/kill_all_safe.mcfunction'))
-        self.assertTrue(self.bp.get_function('functions/teleport/home.mcfunction'))
 
-    def test_non_existent_function(self):
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_function('functions/no_function.mcfunction')
+class TestItemFileBP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_items(self): pass
 
-    def test_editing_command(self):
-        function = self.bp.functions[0]
-        command = function.commands[0]
+    def test_add_item(self): pass
 
-        self.assertEqual(command.data, '# Remove all entities except players')
-        command.data = 'new'
-        self.assertEqual(command.data, 'new')
+    def test_components(self): pass
 
-class TestItemFileBP(unittest.TestCase):pass
+    def test_add_component(self): pass
 
 class TestLootTables(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
 
-    def test_loot_table(self):
+    def test_loot_tables(self):
         self.assertEqual(len(self.bp.loot_tables), 2)
         self.assertEqual(self.bp.loot_tables[0].file_name, 'dolphin.json')
     
-    def test_pools(self):
-        self.assertEqual(len(self.bp.loot_tables[0].pools), 1)
-
-    def test_loot_from_entity(self):
+    def test_get_loot_table(self):
         dolphin = self.bp.get_entity('minecraft:dolphin')
         group = dolphin.get_component_group('dolphin_adult')
         component = group.get_component('minecraft:loot')
@@ -435,14 +558,23 @@ class TestLootTables(unittest.TestCase):
         loot_table = self.bp.get_loot_table(table_name)
         self.assertEqual(len(loot_table.pools), 1)
 
+    def test_add_loot_table(self): pass
+
+    def test_pools(self):
+        self.assertEqual(len(self.bp.loot_tables[0].pools), 1)
+
+    def test_get_pool(self): pass
+
+    def test_add_pool(self): pass
+      
 class TestRecipes(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
 
-    def test_files(self):
+    def test_recipes(self):
         self.assertEqual(len(self.bp.recipes), 5)
 
-    def test_get(self):
+    def test_get_recipe_file(self):
         """
         Test all possible recipe types.
         """
@@ -455,60 +587,125 @@ class TestRecipes(unittest.TestCase):
         with self.assertRaises(AssetNotFoundError):
             self.bp.get_recipe('no found')
 
-class TestScripts(unittest.TestCase):pass
+    def test_add_recipe_file(self): pass
 
-class TestSpawnRuleFile(unittest.TestCase):pass
+##class TestScripts(unittest.TestCase):pass
+
+class TestSpawnRuleFile(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_spawn_rules(self): pass
+
+    def test_add_spawn_rule(self): pass
 
 ##class TestTradeTables(unittest.TestCase):pass
 
 ## --------------------- ##
 ## Resource Pack Classes ##
 ## --------------------- ##
-class TestAnimationControllerBP(unittest.TestCase):pass
+class TestAnimationControllerRP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_animation_controllers_files(self): pass
+
+    def test_animation_controllers(self): pass
+
+    def test_animation_controller_properties(self): pass
+
+    def test_add_animation_controller_file(self): pass
+
+    def test_add_animation_controller(self): pass
+
+    def test_states(self): pass
+
+    def test_add_state(self): pass
 
 class TestAnimationRP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
+        self.animation_file = self.rp.get_animation_file('animations/dolphin.animation.json')
 
-    def test_animation_file(self):
+    def test_animation_files(self):
         self.assertEqual(1, len(self.rp.animation_files))
+
         self.assertTrue(self.rp.get_animation_file('animations/dolphin.animation.json'))
+    
+    def test_animations(self): 
+        self.assertEqual(1, len(self.animation_file.animations))
 
-        animation_file = self.rp.get_animation_file('animations/dolphin.animation.json')
+        self.assertTrue(self.animation_file.get_animation('animation.dolphin.move'))
+
+    def test_animation_file_properties(self): pass       
+
+    def test_add_animation_file(self): pass
+
+    def test_add_animation(self): pass
+
+    def test_bones(self): pass
+
+    def test_get_bone(self): pass
+
+    def test_add_bone(self): pass
+
+class TestAttachable(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
         
-        self.assertEqual(1, len(animation_file.animations))
-        self.assertTrue(animation_file.get_animation('animation.dolphin.move'))
+    def test_attachables(self): pass
 
-class TestAttachable(unittest.TestCase):pass
+    def test_add_attachable(self): pass
 
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.entity = self.rp.get_entity('minecraft:dolphin')
 
-    def test_entity_file_path(self):
-        """
-        Tests that the entity file path is correct.
-        """
+    def test_entities(self): pass
 
-        # Check filepath
-        self.assertEqual(self.entity.file_path, 'entity\\dolphin.entity.json')
+    def test_add_entity_rp(self): pass
+
+    def test_entity_rp_properties(self): pass
+
+    def test_animations(self): pass
+
+    def test_models(self): pass
+
+    def test_textures(self): pass
+
+    def test_materials(self): pass
+
+    # Getting & Adding handled in each class
 
 class TestFogs(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
+        self.fog_file = self.rp.get_fog('minecraft:fog_mushroom_island_shore')
 
     def test_fog_files(self):
         self.assertEqual(len(self.rp.fogs), 3)
-        fog_file = self.rp.get_fog('minecraft:fog_mushroom_island_shore')
-        self.assertEqual(len(fog_file.distance_components), 2)
-        self.assertEqual(len(fog_file.volumetric_density_components), 1)
-        self.assertEqual(len(fog_file.volumetric_media_coefficients), 2)
+        self.rp.get_fog('minecraft:fog_mushroom_island_shore')
 
-        component = fog_file.get_distance_component('air')
+    def test_add_fog_file(self): pass
+
+    def test_fog_file_properties(self): 
+        self.assertEqual(len(self.fog_file.distance_components), 2)
+        self.assertEqual(len(self.fog_file.volumetric_density_components), 1)
+        self.assertEqual(len(self.fog_file.volumetric_media_coefficients), 2)
+
+        component = self.fog_file.get_distance_component('air')
         self.assertEqual(component.data['fog_end'], 60)
 
-class TestItemFileBP(unittest.TestCase):pass
+class TestItemFileRP(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_items(self): pass
+
+    def test_add_item_rp(self): pass
+
+    def test_item_rp_properties(self): pass
 
 class TestMaterials(unittest.TestCase):
     def setUp(self) -> None:
@@ -517,18 +714,24 @@ class TestMaterials(unittest.TestCase):
     def test_material_files(self):
         self.assertEqual(len(self.rp.material_files), 1)
 
-    def test_materials(self):
-        self.assertEqual(len(self.rp.materials), 5)
-
-    def test_get_material_file(self):
         self.rp.get_material_file('materials/test.material')
         with self.assertRaises(AssetNotFoundError):
             self.rp.get_material_file('materials/dne.material')
 
-    def test_get_material(self):
+    def test_materials(self):
+        self.assertEqual(len(self.rp.materials), 5)
+
         self.rp.get_material('dolphin')
         with self.assertRaises(AssetNotFoundError):
             self.rp.get_material('dne')
+
+    def test_add_material_file(self): pass
+
+    def test_add_material(self): pass
+
+    def test_material_file_properties(self): pass
+
+    def test_material_properties(self): pass
 
 class TestMaterialTriple(unittest.TestCase):
     def setUp(self) -> None:
@@ -573,23 +776,27 @@ class TestModels(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = Project('./content/bp/', './content/rp/').get_packs()
 
-    def test_model_file(self):
+    def test_model_files(self): 
         self.assertEqual(len(self.rp.models), 1)
+
+    def test_models(self): 
         self.assertTrue(len(self.rp.model_files), 1)
-        
-        model_file = self.rp.model_files[0]
-        model = self.rp.get_model('geometry.dolphin')
-        self.assertEqual(model_file.models[0].id, model.id)
 
-        self.assertEqual(model.file.file_name, 'dolphin.geo.json')
+    def test_add_model_file(self):pass
 
-    def test_bones(self):
+    def test_add_model(self):pass
+
+    def test_model_properites(self):
         model = self.rp.get_model('geometry.dolphin')
         self.assertEqual(len(model.bones), 9)
 
 class TestParticle(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
+
+    def test_particles(self):pass
+
+    def test_add_partcile(self):pass
 
     def test_particle_properties(self):
         """
@@ -623,17 +830,17 @@ class TestRenderControllers(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
 
-    def test_render_controller_file(self):
+    def test_render_controller_files(self):
         self.assertEqual(len(self.rp.render_controller_files), 1)
 
-    def test_render_controller(self):
+        self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
+
+    def test_render_controllers(self):
         self.assertEqual(len(self.rp.render_controllers), 2)
 
-    def test_get_render_controller(self):
-        self.rp.get_render_controller('controller.render.dolphin')
+        self.rp.get_render_controller('controller.render.dolphin')        
 
-    def test_get_render_controller_file(self):
-        self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
+    def test_add_render_controller_file(self): pass
 
     def test_add_render_controller(self):
         render_controller_file = self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
@@ -642,7 +849,10 @@ class TestRenderControllers(unittest.TestCase):
 
         self.assertEqual(len(self.rp.render_controllers), 3)
     
-    def test_internals(self):
+    def test_render_controller_file_properties(self):
+        self.assertEqual(self.rp.get_render_controller('controller.render.dolphin').file.format_version, '1.8.0')
+
+    def test_render_controller_properties(self):
         self.assertEqual(self.rp.get_render_controller('controller.render.dolphin').file.format_version, '1.8.0')
 
 class TestSounds(unittest.TestCase):
@@ -666,8 +876,6 @@ class TestTextures(unittest.TestCase):
 
     def test_textures(self):
         self.assertEqual(len(self.rp.textures), 5)
-
-    def test_texture_paths(self):
         self.assertEqual(self.rp.textures[0], 'textures/blocks/ancient_debris_top.png')
 
     def test_get_textures(self):
@@ -694,7 +902,6 @@ class TestStandaloneTextureFiles(unittest.TestCase):
 
         self.assertEqual(texture_definition.textures[0], 'textures/blocks/anvil_base')
         self.assertEqual(len(texture_definition.textures), 4)
-
 
     def test_item_texture_file(self):
         item_texture_file = self.rp.item_texture_file
