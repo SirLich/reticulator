@@ -33,7 +33,7 @@ def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Un
 
 def format_version(jsonpath: str = "format_version"):
     """
-    Class Decorator which inserts a 'format_version property, with proper
+    Class Decorator which inserts a 'format_version' property, with proper
     semantics.
     """
 
@@ -130,8 +130,7 @@ def get_sub_resource(attribute: str, child_attribute: str):
         return wrapper
     return decorator
 
-
-def add_sub_resource(cls, jsonpath: str, attribute: str):
+def add_sub_resource(cls: JsonSubResource, jsonpath: str, attribute: str):
     """
     This decorator allows you to inject SubResources into your Resources.
 
@@ -2455,7 +2454,7 @@ class Bone(JsonSubResource):
         return self.get_jsonpath("name")
     
     @name.setter
-    def identifier(self, name):
+    def name(self, name):
         return self.set_jsonpath("name", name)
 
     @cached_property
