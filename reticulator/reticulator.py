@@ -910,9 +910,14 @@ class LanguageFile(FileResource):
         Adds a new translation key. Overwrites by default.
         """
 
-        # We must complain about duplicates, unless
-        if self.contains_translation(translation.key) and not overwrite:
-            return False
+        # We must complain about duplicates.
+        # If no overwrite, don't add
+        # If overwrite, delete previous translation
+        if self.contains_translation(translation.key):
+            if not overwrite:
+                return False
+            else:
+                self.delete_translation(translation.key)
 
         self.dirty = True
         self.__translations.append(translation)
