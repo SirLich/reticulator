@@ -393,6 +393,7 @@ class TestBlockFileBP(unittest.TestCase):
 
         self.assertEqual(len(self.block.components), 1)
         self.block.get_component('minecraft:destroy_time')
+        
         with self.assertRaises(AssetNotFoundError):
             self.block.get_component('minecraft:dne')
 
@@ -838,15 +839,15 @@ class TestRenderControllers(unittest.TestCase):
     def test_render_controllers(self):
         self.assertEqual(len(self.rp.render_controllers), 2)
 
-        self.rp.get_render_controller('controller.render.dolphin')        
+        self.rp.get_render_controller('controller.render.dolphin')
 
     def test_add_render_controller_file(self): pass
 
     def test_add_render_controller(self):
-        render_controller_file = self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
-        render_controller = render_controller_file.add_render_controller('controller.render.test',{})
-        render_controller_file.format_version
+        rcf = self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
 
+        self.assertEqual(len(self.rp.render_controllers), 2)
+        rc = rcf.add_render_controller('controller.render.test', {})
         self.assertEqual(len(self.rp.render_controllers), 3)
     
     def test_render_controller_file_properties(self):

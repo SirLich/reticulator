@@ -5,8 +5,7 @@
             "identifier": "namespace:block"
         },
         "components": {
-            "minecraft:destroy_time": 10,
-            "minecraft:display_name": ""
+            "minecraft:destroy_time": 10
         }
     }
 }

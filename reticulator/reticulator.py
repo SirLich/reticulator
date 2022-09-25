@@ -8,7 +8,8 @@ import functools
 
 from pathlib import Path
 from functools import cached_property
-from typing import Union, Tuple
+from typing import Union, Tuple, overload
+from dataclasses import dataclass
 
 import dpath.util
 
@@ -16,7 +17,18 @@ NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
 
+@dataclass
+class DecoratorArgSet:
+    """
+    Class for encapsulating the arguments that are passed to sub-resource based
+    decorators.
+    """
+    # The class of the property
+    cls : Resource 
 
+    # The jsonpath, relative to the *parent* where the properties are located.
+    jsonpath: str
+    
 def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
     """
     Converts a dict or list to a notify structure.
@@ -149,14 +161,15 @@ def json_resource(*, cls: JsonFileResource, filepath : str, extension = '.json')
         return wrapper
     return decorator
 
-def sub_resource(*, cls: JsonSubResource, jsonpath : str):
+def sub_resource(animation_property : DecoratorArgSet):
     """
     Base decorator for doing a subresource type
     :param cls: The class you want to create, when parsing the data
     """
+    cls = animation_property.cls
+    jsonpath = animation_property.jsonpath
 
-    # TODO: Store this on cls, and then make it private by injecting __
-    attribute = '__render_controllers'
+    attribute = cls.__name__
 
     def decorator(func):
         @cached_property
@@ -184,18 +197,31 @@ def get_sub_resource(attribute: str, child_attribute: str):
         return wrapper
     return decorator
 
-def add_sub_resource(cls: JsonSubResource, jsonpath: str, attribute: str):
+def add_sub_resource(prop : DecoratorArgSet):
     """
     This decorator allows you to inject SubResources into your Resources.
-
-    @param cls: The class to create, as a child.
-    @param jsonpath: The jsonpath, representing where to inject the newly created resource.
-    @param attribute: The attribute where this attribute will
     """
+    cls = prop.cls
+    jsonpath = prop.jsonpath
+    attribute = cls.__name__
+
     def decorator_sub_resource(func):
         @functools.wraps(func)
         def wrapper_sub_resource(self, *args):
-            if len(args) == 2 and isinstance(args[0], str):
+
+            # This handles the case where a class is passed in directly.
+            # like `add_box(Box(..))``
+            if len(args) == 1 and isinstance(args[0], cls):
+                object = args[0]
+
+                self.set_jsonpath(object.json_path, object.data)
+                object.parent = self
+                getattr(self, attribute).append(object)
+                return object
+
+            # This handles the 'normal' flow, where arguments are passed in
+            # via 'parts' and are constructed automatically.
+            else:
                 name = args[0]
                 data = args[1]
 
@@ -203,16 +229,7 @@ def add_sub_resource(cls: JsonSubResource, jsonpath: str, attribute: str):
                 object = cls(data=data, parent=self, json_path=jsonpath + name)
                 return object
 
-            elif len(args) == 1 and isinstance(args[0], cls):
-                object = args[0]
 
-                self.set_jsonpath(object.json_path, object.data)
-                object.parent = self
-                getattr(self, attribute).append(object)
-                return object
-            else:
-                # TODO: Fix this error message
-                raise TypeError('Accepts either name and data or instance of class.')
         return wrapper_sub_resource
     return decorator_sub_resource
 
@@ -1464,21 +1481,10 @@ class EntityFileBP(JsonFileResource):
                 return child
         raise AssetNotFoundError(id)
 
-    @add_sub_resource(cls=ComponentGroup, jsonpath="minecraft:entity/component_groups/", attribute='component_groups')
-    def add_component_group(self, *args) -> ComponentGroup:
-        """
-        Adds component group to the entity components and returns it.
-        @param name
-        """
+    _component_group_property = DecoratorArgSet(ComponentGroup, "minecraft:entity/component_groups")
 
-    # def add_component_group(self, name: str, data: dict) -> ComponentGroup:
-    #     """
-    #     Adds a component group to the entity components, and returns it. 
-    #     """
-    #     self.set_jsonpath("minecraft:entity/component_groups/" + name, data)
-    #     new_object = ComponentGroup(data = data, parent = self, json_path = "minecraft:entity/component_groups/" + name)
-    #     self.__component_groups.append(new_object)
-    #     return new_object
+    @add_sub_resource(_component_group_property)
+    def add_component_group(self, *args) -> ComponentGroup: pass
 
     def add_component(self, name: str, data: dict) -> Component:
         """
@@ -1675,9 +1681,18 @@ class AnimationControllerFileRP(JsonFileResource):
 
 
 class AnimationRP(JsonSubResource):
-    @sub_resource(cls=JsonSubResource, jsonpath='bones')
+
+    _bone_property = DecoratorArgSet(JsonSubResource, "bones")
+
+    @sub_resource(_bone_property)
     def bones(self) -> list[JsonSubResource]: pass
     
+    # @add_sub_resource(animation_property)
+    # def add_bone(self, *args) -> AnimationRP: pass
+
+    # @get_sub_resource('animations', 'id')
+    # def get_animation(self, id: str) -> AnimationRP: pass
+
     @property
     def loop(self):
         return self.get_jsonpath("loop")
@@ -1692,17 +1707,17 @@ class AnimationFileRP(JsonFileResource):
     Since many animations are defined in the same file, it is often more useful.
     to use the AnimationRP class instead.
     """
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
-    
-    @sub_resource(cls=AnimationRP, jsonpath='animations')
+
+    animation_property = DecoratorArgSet(AnimationRP, "animations")
+
+    @sub_resource(animation_property)
     def animations(self) -> list[AnimationRP]: pass
+
+    @add_sub_resource(animation_property)
+    def add_animation(self, *args) -> AnimationRP: pass
 
     @get_sub_resource('animations', 'id')
     def get_animation(self, id: str) -> AnimationRP: pass
-
-    @add_sub_resource(cls=AnimationRP, jsonpath="animations/", attribute='animations')
-    def add_component_group(self, *args) -> AnimationRP: pass
 
 
 @format_version()
@@ -1926,14 +1941,17 @@ class RenderController(JsonSubResource):
 class RenderControllerFile(JsonFileResource):
     format_version : FormatVersion
 
-    def __init__(self, data: dict = None, file_path: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, file_path = file_path, pack = pack)
+    render_controller_property = DecoratorArgSet(RenderController, "render_controllers")
 
-    @sub_resource(cls=RenderController, jsonpath='render_controllers')
+    @sub_resource(render_controller_property)
     def render_controllers(self) -> list[RenderController]: pass
-    
+
+    @add_sub_resource(render_controller_property)
+    def add_render_controller(self, name: str, data: dict, overwrite: bool = False) -> RenderController: pass
+
     @get_sub_resource('render_controllers', 'id')
     def get_render_controller(self, id: str) -> RenderController: pass
+
 
 
 @format_version()
@@ -2310,36 +2328,19 @@ class ResourcePack(Pack):
     @json_resource(cls=ItemFileRP, filepath="items")
     def items(self) -> list[ItemFileRP]: pass
 
-    @cached_property
-    def animations(self) -> list[AnimationRP]:
-        children = []
-        for file in self.animation_files:
-            for child in file.animations:
-                children.append(child)
-        return children
+    # === Child Resources ===
 
-    @cached_property
-    def render_controllers(self) -> list[RenderController]:
-        children = []
-        for file in self.render_controller_files:
-            for child in file.render_controllers:
-                children.append(child)
-        return children
+    @json_child_resource(file_attribute='animation_files', resource_attribute='animations')
+    def animations(self) -> list[AnimationRP]: pass
 
-    @cached_property
-    def animation_controllers(self) -> list[AnimationControllerRP]:
-        children = []
-        for file in self.animation_controller_files:
-            for child in file.animation_controllers:
-                children.append(child)
-        return children
+    @json_child_resource(file_attribute='render_controller_files', resource_attribute='render_controllers')
+    def render_controllers(self) -> list[RenderController]: pass
 
-    @cached_property
-    def models(self) -> list[Model]:
-        for file in self.model_files:
-            for child in file.models:
-                self.__models.append(child)
-        return self.__models
+    @json_child_resource(file_attribute='animation_controller_files', resource_attribute='animation_controllers')
+    def animation_controllers(self) -> list[AnimationControllerRP]: pass
+
+    @json_child_resource(file_attribute='model_files', resource_attribute='models')
+    def models(self) -> list[Model]: pass
 
     @json_child_resource(file_attribute='material_files', resource_attribute='materials')
     def materials(self) -> list[Material]: pass
@@ -2409,6 +2410,7 @@ class ResourcePack(Pack):
         return textures
 
     # === Individual Files ===
+
     @cached_property
     def sounds_file(self) -> SoundsFile:
         file_path = "sounds.json"
@@ -2452,6 +2454,7 @@ class ResourcePack(Pack):
         return self.__biomes_client_file
 
     # === Getters ===
+
     def get_particle(self, identifier:str) -> ParticleFile:
         for child in self.particles:
             if smart_compare(child.identifier, identifier):
