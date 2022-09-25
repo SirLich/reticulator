@@ -437,9 +437,12 @@ class TestEntityFileBP(unittest.TestCase):
         self.assertEqual(len(self.group.components), 4)
         
     def test_add_component_groups(self):
+        # Original Number
+        self.assertEqual(len(self.entity.component_groups), 7)
+
         # Test adding component group by name and data
         component_group_data = { "minecraft:damage" : { "value" : 1 } }
-        component_group = self.entity.add_component_group('group:one',component_group_data)
+        component_group = self.entity.add_component_group('group:one', component_group_data)
         self.assertEqual(component_group.id, 'group:one')
         self.assertEqual(len(self.entity.component_groups), 8)
 
@@ -451,7 +454,9 @@ class TestEntityFileBP(unittest.TestCase):
 
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
 
+        # Test after saving
         saved_entity = saved_bp.get_entity('minecraft:dolphin')
+        print(saved_entity.component_groups)
         new_group = saved_entity.get_component_group('group:one')
         self.assertEqual(new_group.id, 'group:one')
         self.assertEqual(len(new_group.components), 1)
@@ -512,6 +517,7 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(len(self.function.commands), 4)
 
     def test_set_command(self):
+        self.function = self.bp.get_function('functions/kill_all_safe.mcfunction')
         command = self.function.commands[0]
 
         self.assertEqual(command.data, '# Remove all entities except players')
@@ -814,7 +820,7 @@ class TestParticle(unittest.TestCase):
         self.assertEqual(len(self.rp.particles), 2)
         particle = self.rp.get_particle('minecraft:death_explosion_emitter')
         self.assertEqual(particle.file_name, 'explosion_death.json')
-        self.assertEqual(particle.file_path, 'particles\\explosions\\explosion_death.json')
+        self.assertEqual(particle.filepath, 'particles\\explosions\\explosion_death.json')
 
     def test_particle_subresources(self):
         """
@@ -846,8 +852,11 @@ class TestRenderControllers(unittest.TestCase):
     def test_add_render_controller(self):
         rcf = self.rp.get_render_controller_file('render_controllers/dolphin.render_controller.json')
 
+        # Original length
         self.assertEqual(len(self.rp.render_controllers), 2)
         rc = rcf.add_render_controller('controller.render.test', {})
+
+        # After adding the render controller
         self.assertEqual(len(self.rp.render_controllers), 3)
     
     def test_render_controller_file_properties(self):
