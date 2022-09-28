@@ -317,18 +317,18 @@ class TestFormatVersion(unittest.TestCase):
 ## --------------------- ##
 ## Behavior Pack Classes ##
 ## --------------------- ##
-##TODO: Need to add class
+
 class TestAnimationControllerBP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
-        self.animation_controller_file = self.bp.get_animation_controller_file('animation_controller/example.ac.json')
+        self.animation_controller_file = self.bp.get_animation_controller_file('animation_controllers/example.ac.json')
 
-    def test_animation_controller_files(self): 
+    def test_animation_controller_files(self):
         self.assertEqual(len(self.bp.animation_controller_files), 2)
 
-        self.bp.get_animation_controller_file('animation_controller/example.ac.json')
+        self.bp.get_animation_controller_file('animation_controllers/example.ac.json')
         with self.assertRaises(AssetNotFoundError):
-            self.bp.get_animation_controller_file('animation_controller/dne.json')
+            self.bp.get_animation_controller_file('animation_controllers/dne.json')
 
     def test_animation_controllers(self): 
         # From pack
@@ -447,7 +447,8 @@ class TestEntityFileBP(unittest.TestCase):
         self.assertEqual(len(self.entity.component_groups), 8)
 
         # Test adding component group by class
-        group = ComponentGroup({}, self.entity, 'minecraft:entity/component_groups/group:two')
+        group = ComponentGroup(data={}, parent=self.entity, json_path='minecraft:entity/component_groups/group:two')
+
         added_group = self.entity.add_component_group(group)
         self.assertEqual(added_group.id, 'group:two')
         self.assertEqual(len(self.entity.component_groups), 9)
@@ -456,7 +457,7 @@ class TestEntityFileBP(unittest.TestCase):
 
         # Test after saving
         saved_entity = saved_bp.get_entity('minecraft:dolphin')
-        print(saved_entity.component_groups)
+
         new_group = saved_entity.get_component_group('group:one')
         self.assertEqual(new_group.id, 'group:one')
         self.assertEqual(len(new_group.components), 1)
@@ -781,19 +782,19 @@ class TestMaterialTriple(unittest.TestCase):
     
 class TestModels(unittest.TestCase):
     def setUp(self) -> None:
-        self.bp, self.rp = Project('./content/bp/', './content/rp/').get_packs()
+        self.bp, self.rp = get_packs()
 
-    def test_model_files(self): 
+    def test_model(self): 
         self.assertEqual(len(self.rp.models), 1)
 
-    def test_models(self): 
+    def test_model_files(self): 
         self.assertTrue(len(self.rp.model_files), 1)
 
     def test_add_model_file(self):pass
 
     def test_add_model(self):pass
 
-    def test_model_properites(self):
+    def test_model_properties(self):
         model = self.rp.get_model('geometry.dolphin')
         self.assertEqual(len(model.bones), 9)
 
