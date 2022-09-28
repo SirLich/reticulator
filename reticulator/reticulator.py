@@ -1352,11 +1352,32 @@ class BlockFileBP(JsonFileResource):
     @SubResourceAdder(BlockFileComponentBP)
     def add_component(self, name: str, data: dict): pass
 
+@ClassProperty('loop')
+class AnimationBP(JsonSubResource):
+    type_info = TypeInfo(
+        jsonpath = "animations",
+        attribute = "animations",
+        getter_attribute = "id"
+    )
+
+class AnimationFileBP(JsonFileResource):
+    type_info = TypeInfo(
+        filepath = "animations",
+        attribute = "animation_files",
+        getter_attribute = "filepath"
+    )
+
+    @SubResourceDefinition(AnimationBP)
+    def animations(self): pass
+    @SubResourceAdder(AnimationBP)
+    def add_animation(self, name: str, data: dict): pass
+    @Getter(AnimationBP)
+    def get_animation(self, id: str): pass
+
 class BehaviorPack(Pack):
-    def __init__(self, input_path: str, project: Project = None):
-        super().__init__(input_path, project=project)
-        self.__items: ItemFileBP = []
-        self.__blocks: BlockFileBP = []
+    """
+    The BehaviorPack represents the behavior pack of a project.
+    """
 
     @ResourceDefinition(AnimationControllerFileBP)
     def animation_controller_files(self): pass
@@ -1366,6 +1387,15 @@ class BehaviorPack(Pack):
     def animation_controllers(self): pass
     @ChildGetter(AnimationControllerFileBP, AnimationControllerBP)
     def get_animation_controller(self, id: str): pass
+
+    @ResourceDefinition(AnimationFileBP)
+    def animation_files(self): pass
+    @Getter(AnimationFileBP)
+    def get_animation_file(self, filepath: str): pass
+    @JsonChildResource(AnimationFileBP, AnimationBP)
+    def animations(self): pass
+    @ChildGetter(AnimationFileBP, AnimationBP)
+    def get_animation(self, id: str): pass
 
     @ResourceDefinition(FunctionFile)
     def functions(self): pass
@@ -1585,7 +1615,6 @@ class AnimationFileRP(JsonFileResource):
     @Getter(AnimationRP)
     def get_animation(self, id: str): pass
 
-
 @format_version()
 @identifier("minecraft:attachable/description/identifier")
 class AttachableFileRP(JsonFileResource):
@@ -1626,7 +1655,6 @@ class EntityFileRP(JsonFileResource):
         getter_attribute = "identifier"
     )
 
-
     @property
     def counterpart(self) -> EntityFileBP:
         return self.pack.project.behavior_pack.get_entity(self.identifier)
@@ -1638,11 +1666,14 @@ class EntityFileRP(JsonFileResource):
     @SubResourceAdder(EntityEventBP)
     def add_event(self, name: str, data: dict): pass
 
+    # TODO: See if the decoration system can apply to these 'triples'.
+    # Or we need to add 'adders' for all three (anim, texture, model)
     @cached_property
     def animations(self) -> list[AnimationTriple]:
+        self._animations = []
         for path, data in self.get_data_at("minecraft:client_entity/description/animations"):
-            self.__animations.append(AnimationTriple(parent = self, json_path = path, data = data))
-        return self.__animations
+            self._animations.append(AnimationTriple(parent = self, json_path = path, data = data))
+        return self._animations
     
     def get_animation(self, identifier:str) -> AnimationTriple:
         """
@@ -1655,9 +1686,10 @@ class EntityFileRP(JsonFileResource):
 
     @cached_property
     def textures(self) -> list[TextureDouble]:
+        self._textures = []
         for path, data in self.get_data_at("minecraft:client_entity/description/textures"):
-            self.__textures.append(TextureDouble(parent = self, json_path = path, data = data))
-        return self.__textures
+            self._textures.append(TextureDouble(parent = self, json_path = path, data = data))
+        return self._textures
     
     def get_texture(self, identifier:str) -> TextureDouble:
         """
@@ -1670,9 +1702,10 @@ class EntityFileRP(JsonFileResource):
 
     @cached_property
     def models(self) -> list[ModelTriple]:
+        self._models = []
         for path, data in self.get_data_at("minecraft:client_entity/description/geometry"):
-            self.__models.append(ModelTriple(parent = self, json_path = path, data = data))
-        return self.__models
+            self._models.append(ModelTriple(parent = self, json_path = path, data = data))
+        return self._models
     
     def get_model(self, identifier:str) -> ModelTriple:
         """
@@ -1685,9 +1718,10 @@ class EntityFileRP(JsonFileResource):
 
     @cached_property
     def materials(self) -> list[MaterialTriple]:
+        self._materials = []
         for path, data in self.get_data_at("minecraft:client_entity/description/materials"):
-            self.__materials.append(MaterialTriple(parent = self, json_path = path, data = data))
-        return self.__materials
+            self._materials.append(MaterialTriple(parent = self, json_path = path, data = data))
+        return self._materials
     
     def get_material(self, identifier:str) -> MaterialTriple:
         """

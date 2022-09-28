@@ -363,9 +363,9 @@ class TestAnimationBP(unittest.TestCase):
         # From animation file
         self.assertEqual(len(self.animation_file.animations), 1)
 
-        self.bp.get_animation('animations.test')
+        self.bp.get_animation('animation.test')
         with self.assertRaises(AssetNotFoundError):
-            self.bp.get_animation('animation.dne')       
+            self.bp.get_animation('animation.dne')
 
     def test_add_animation_file(self): pass
 
