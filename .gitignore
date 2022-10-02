@@ -1,6 +1,7 @@
 !reticulator.py
 test/out
 test/exp.py
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
