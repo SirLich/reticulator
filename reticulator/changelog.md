@@ -56,7 +56,7 @@
   - volumetric_media_coefficients
   - Getters for all component types
 
-# 1.0.0-rc1
+# 0.0.17-beta
  - Replaced EntityFileBP.create_component_group with EntityFileBP.add_component_group
  - Replaced EntityFileBP.create_component with EntityFileBP.add_component
  - Replaced ComponentGroup.create_component with ComponentGroup.add_component
@@ -68,3 +68,10 @@
     - Rename `input_path` to `input_directory`
     - Rename `output_path` to `output_directory`
  - Added FormatVersion class
+
+# 0.0.18-beta
+ - Unknown
+
+# 0.1.0-beta
+ - Rewrote much of the codebase to use meta-programming
+ - Added many missing get/set/delete methods
