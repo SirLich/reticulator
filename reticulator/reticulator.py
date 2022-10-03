@@ -12,6 +12,11 @@ from typing import Union, Tuple, TypeVar, Any
 
 import dpath.util
 
+"""
+Allow jsonfiles to be created from scratch, by injecting os.getcwd if no base path is found.
+"""
+
+
 NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
@@ -149,10 +154,10 @@ def ResourceDefinition(cls : T):
     filepath = cls.type_info.filepath
     extension = cls.type_info.extension
 
-    def decorator(func) -> cached_property[List[T]]:
+    def decorator(func) -> cached_property[list[T]]:
         @cached_property
         @functools.wraps(func)
-        def wrapper(self) -> List[T]:
+        def wrapper(self) -> list[T]:
             setattr(self, attribute, [])
             base_directory = os.path.join(self.input_path, filepath)
 
@@ -168,10 +173,10 @@ def ResourceDefinition(cls : T):
 def SubResourceDefinition(cls: T):
     jsonpath = cls.type_info.jsonpath
     attribute = cls.type_info.attribute
-    def decorator(func) -> cached_property[List[T]]:
+    def decorator(func) -> cached_property[list[T]]:
         @cached_property
         @functools.wraps(func)
-        def wrapper(self) -> List[T]:
+        def wrapper(self) -> list[T]:
             setattr(self, attribute, [])
             for path, data in self.get_data_at(jsonpath):
                 getattr(self, attribute).append(cls(parent = self, json_path = path, data = data))
@@ -181,6 +186,10 @@ def SubResourceDefinition(cls: T):
 
 
 def Getter(cls : T):
+    """
+    Decorator which allows you to get a resource. For example getting a component
+    from an entity.
+    """
     attribute = cls.type_info.attribute
     getter_attribute = cls.type_info.getter_attribute
     def decorator(func) -> T:
@@ -189,7 +198,7 @@ def Getter(cls : T):
             for child in getattr(self, attribute):
                 if smart_compare(getattr(child, getter_attribute), compare):
                     return child
-            raise AssetNotFoundError(compare)
+            return None # No longer raises an error. Allow a getter to return none.
         return wrapper
     return decorator
 
@@ -921,15 +930,17 @@ class JsonFileResource(FileResource, JsonResource):
         return f"'{self.__class__.__name__}: {self.filepath}'"
 
 
-    def load_json(self, local_path: str) -> dict:
+    def load_json(self, filepath: str) -> dict:
         """
         Loads json from file. `local_path` paramater is local to the projects
         input path.
         """
-        filepath = os.path.join(self.pack.input_path, local_path)
+        
+        if self.pack:
+            filepath = os.path.join(self.pack.input_path, filepath)
+
         if not os.path.exists(filepath):
             raise AssetNotFoundError(f"File not found: {filepath}")
-        
         try:
             with open(filepath, "r", encoding='utf8') as fh:
                 try:
@@ -1309,6 +1320,13 @@ class ItemComponentBP(JsonSubResource):
         getter_attribute = "id"
     )
 
+class ItemEventBP(JsonSubResource):
+    type_info = TypeInfo(
+        jsonpath = "minecraft:item/events",
+        attribute = "events",
+        getter_attribute = "id"
+    )
+
 
 @format_version()
 @identifier("minecraft:item/description/identifier")
@@ -1325,6 +1343,13 @@ class ItemFileBP(JsonFileResource):
     def get_component(self, id: str): pass
     @SubResourceAdder(ItemComponentBP)
     def add_component(self, name: str, data: dict): pass
+
+    @SubResourceDefinition(ItemEventBP)
+    def events(self): pass
+    @Getter(ItemEventBP)
+    def get_event(self, id: str): pass
+    @SubResourceAdder(ItemEventBP)
+    def add_event(self, name: str, data: dict): pass
 
 
 class BlockFileComponentBP(JsonSubResource):

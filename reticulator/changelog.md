@@ -75,3 +75,9 @@
 # 0.1.0-beta
  - Rewrote much of the codebase to use meta-programming
  - Added many missing get/set/delete methods
+
+# 0.1.1-beta
+ - Getters now return 'None' instead of throwing an error.
+ - Fixed intellisense for resource and sub-resource definitions
+ - Added `ItemEventBP` + methods in `ItemFileBP`
+ - Allowed JsonFileResources to function when they are created free of a pack
