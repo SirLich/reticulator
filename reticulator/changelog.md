@@ -81,3 +81,7 @@
  - Fixed intellisense for resource and sub-resource definitions
  - Added `ItemEventBP` + methods in `ItemFileBP`
  - Allowed JsonFileResources to function when they are created free of a pack
+
+# 0.1.2-beta
+ - Introduced a new @SingleResourceDefinition decorator
+ - Fixed intellisense for @identifier, @format_version, and @ClassProperty

@@ -12,11 +12,6 @@ from typing import Union, Tuple, TypeVar, Any
 
 import dpath.util
 
-"""
-Allow jsonfiles to be created from scratch, by injecting os.getcwd if no base path is found.
-"""
-
-
 NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
 SOUND_EXTENSIONS = ["wav", "fsb", "ogg"]
@@ -166,6 +161,23 @@ def ResourceDefinition(cls : T):
 
                 getattr(self, attribute).append(cls(filepath = local_path, pack = self))
             return getattr(self, attribute)
+        return wrapper
+    return decorator
+
+def SingleResourceDefinition(cls : T):
+    """Inserts implementation for JsonFileResource (single)"""
+
+    attribute = cls.__name__
+    filepath = cls.type_info.filepath
+    extension = cls.type_info.extension
+
+    def decorator(func) -> cached_property[T]:
+        @cached_property
+        @functools.wraps(func)
+        def wrapper(self) -> T:
+            new_object = cls(filepath = filepath + extension, pack = self)
+            setattr(self, attribute, new_object)
+            return new_object
         return wrapper
     return decorator
 
@@ -1127,6 +1139,8 @@ class AnimationControllerBP(JsonSubResource):
 
 @format_version()
 class AnimationControllerFileBP(JsonFileResource):
+
+    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "animation_controllers",
         attribute = "animation_controller_files",
@@ -1192,6 +1206,8 @@ class FunctionFile(FileResource):
 @identifier("minecraft:feature_rules/description/identifier")
 @format_version()
 class FeatureRuleFile(JsonFileResource):
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "feature_rules",
         attribute = "feature_rules",
@@ -1201,6 +1217,8 @@ class FeatureRuleFile(JsonFileResource):
 @identifier("**/description/identifier")
 @format_version()
 class FeatureFile(JsonFileResource):
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "features",
         attribute = "features",
@@ -1210,6 +1228,8 @@ class FeatureFile(JsonFileResource):
 @format_version()
 @identifier("minecraft:spawn_rules/description/identifier")
 class SpawnRuleFile(JsonFileResource):
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "spawn_rules",
         attribute = "spawn_rules",
@@ -1219,6 +1239,8 @@ class SpawnRuleFile(JsonFileResource):
 @identifier("**/identifier")
 @format_version()
 class RecipeFile(JsonFileResource):
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "recipes",
         attribute = "recipes",
@@ -1266,6 +1288,8 @@ class ComponentGroup(JsonSubResource):
 @format_version()
 @identifier("minecraft:entity/description/identifier")
 class EntityFileBP(JsonFileResource):
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "entities",
         attribute = "entities",
@@ -1331,6 +1355,8 @@ class ItemEventBP(JsonSubResource):
 @format_version()
 @identifier("minecraft:item/description/identifier")
 class ItemFileBP(JsonFileResource):
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "items",
         attribute = "items",
@@ -1363,7 +1389,8 @@ class BlockFileComponentBP(JsonSubResource):
 @format_version()
 @identifier(jsonpath="minecraft:block/description/identifier")
 class BlockFileBP(JsonFileResource):
-
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "blocks",
         attribute = "blocks",
@@ -1552,7 +1579,8 @@ class ParticleFile(JsonFileResource):
     """
     ParticleFile is a JsonFileResource which represents a particle file.
     """
-
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "particles",
         attribute = "particles",
@@ -1643,7 +1671,8 @@ class AnimationFileRP(JsonFileResource):
 @format_version()
 @identifier("minecraft:attachable/description/identifier")
 class AttachableFileRP(JsonFileResource):
-
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "attachables",
         attribute = "attachables",
@@ -1655,16 +1684,23 @@ class BiomesClientFile(JsonFileResource):
     """
     BiomesClientFile is a class which represents the data stored in 'rp/biomes_client.json'
     """
-    def __init__(self, data: dict = None, filepath: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, filepath = filepath, pack = pack)
+
+    type_info = TypeInfo(
+        filepath = "biomes_client",
+        attribute = "biomes_client_file"
+    )
 
 
 class BlocksFile(JsonFileResource):
     """
     BlocksFile is a class which represents the data stored in 'rp/blocks.json'
     """
-    def __init__(self, data: dict = None, filepath: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, filepath = filepath, pack = pack)
+
+    type_info = TypeInfo(
+        filepath = "blocks",
+        attribute = "blocks_file"
+    )
+
 
 
 @format_version()
@@ -1673,7 +1709,8 @@ class EntityFileRP(JsonFileResource):
     """
     EntityFileRP is a class which represents a resource pack's entity file.
     """
-
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "entity",
         attribute = "entities",
@@ -1763,11 +1800,17 @@ class FlipbookTexturesFile(JsonFileResource):
     FlipbookTexturesFile is a class which represents the data stored in 'rp/textures/flipbook_textures.json'
     """
 
+    type_info = TypeInfo(
+        filepath = "textures/flipbook_textures",
+        attribute = "flipbook_textures_file"
+    )
+
 
 @format_version()
 @identifier("minecraft:fog_settings/description/identifier")
 class FogFile(JsonFileResource):
-
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "fogs",
         attribute = "fogs",
@@ -1826,7 +1869,8 @@ class ItemComponentRP(JsonSubResource):
 @format_version()
 @identifier("minecraft:item/description/identifier")
 class ItemFileRP(JsonFileResource):
-
+    format_version : FormatVersion
+    identifier: str
     type_info = TypeInfo(
         filepath = "items",
         attribute = "items",
@@ -1858,7 +1902,7 @@ class MaterialFile(JsonFileResource):
     Since many materials can be defined in the same file, it is often more useful
     to use the MaterialRP class directly.
     """
-
+    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "materials",
         attribute = "material_files",
@@ -1882,6 +1926,7 @@ class Cube(JsonSubResource):
 
 @ClassProperty("name")
 class Bone(JsonSubResource):
+    name: str
     type_info = TypeInfo(
         jsonpath = "bones",
         attribute = "bones",
@@ -1898,6 +1943,7 @@ class Bone(JsonSubResource):
 
 @identifier("description/identifier")
 class Model(JsonSubResource):
+    identifier: str
     type_info = TypeInfo(
         jsonpath = "minecraft:geometry",
         attribute = "models",
@@ -1913,6 +1959,7 @@ class Model(JsonSubResource):
 
 @format_version()
 class ModelFile(JsonFileResource):
+    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "models",
         attribute = "model_files",
@@ -1941,7 +1988,6 @@ class RenderController(JsonSubResource):
 @format_version()
 class RenderControllerFile(JsonFileResource):
     format_version : FormatVersion
-
     type_info = TypeInfo(
         filepath = "render_controllers",
         attribute = "render_controller_files",
@@ -1962,19 +2008,28 @@ class SoundDefinitionsFile(JsonFileResource):
     SoundsDefinitionFile is a class which represents the data stored in
     'rp/sounds/sound_definitions.json'
     """
-    
     format_version : FormatVersion
+    type_info = TypeInfo(
+        filepath = "sounds/sound_definitions",
+        attribute = "sound_definitions_file"
+    )
 
 
 class SoundsFile(JsonFileResource):
     """
     SoundsFile is a class which represents the data stored in 'rp/sounds.json'
     """
+    type_info = TypeInfo(
+        filepath = "sounds",
+        attribute = "sounds_file"
+    )
 
 class StandAloneTextureFile(JsonFileResource):
     """
     StandAloneTextureFile is a class which represents the data stored in 'rp/textures/*_texture.json'.
     Examples: 'item_texture.json', 'terrain_texture.json.
+
+    These actual children are subclassed
     """
     def __init__(self, data: dict = None, filepath: str = None, pack: Pack = None) -> None:
         super().__init__(data = data, filepath = filepath, pack = pack)
@@ -1998,7 +2053,18 @@ class StandAloneTextureFile(JsonFileResource):
         })
         self.__texture_definitions.append(TextureFileDouble(parent = self, json_path = f"texture_data/{shortname}", data = {"textures": textures}))
 
+class TerrainTextureFile(StandAloneTextureFile):
+    type_info = TypeInfo(
+        filepath = "textures/terrain_texture",
+        attribute = "terrain_texture_file"
+    )
 
+class ItemTextureFile(StandAloneTextureFile):
+    type_info = TypeInfo(
+        filepath = "textures/item_texture",
+        attribute = "item_texture_file"
+    )
+    
 class MaterialTriple(JsonSubResource):
     """
     A special sub-resource, which represents a material within an RP entity.
@@ -2182,13 +2248,6 @@ class ResourcePack(Pack):
         super().__init__(input_path, project=project)
         self._sounds: list[str] = []
         self._textures: list[str] = []
-        self._sounds_file: SoundsFile = None
-        self._sound_definitions_file: SoundDefinitionsFile = None
-        self._terrain_texture_file: StandAloneTextureFile = None
-        self._item_texture_file: StandAloneTextureFile = None
-        self._flipbook_textures_file: FlipbookTexturesFile = None
-        self._blocks_file: BlocksFile = None
-        self._biomes_client_file: BiomesClientFile = None
 
     @ResourceDefinition(ParticleFile)
     def particles(self): pass
@@ -2326,44 +2385,23 @@ class ResourcePack(Pack):
 
     # === Individual Files ===
 
-    @cached_property
-    def sounds_file(self) -> SoundsFile:
-        filepath = "sounds.json"
-        self._sounds_file = SoundsFile(filepath = filepath, pack = self)
-        return self._sounds_file
+    @SingleResourceDefinition(SoundsFile)
+    def sounds_file(self): pass
 
-    @cached_property
-    def sound_definitions_file(self) -> SoundDefinitionsFile:
-        filepath = os.path.join("sounds", "sound_definitions.json")
-        self._sound_definitions_file = SoundDefinitionsFile(filepath = filepath, pack = self)
-        return self._sound_definitions_file
+    @SingleResourceDefinition(SoundDefinitionsFile)
+    def sound_definitions_file(self) -> SoundDefinitionsFile: pass
 
-    @cached_property
-    def terrain_texture_file(self) -> StandAloneTextureFile:
-        filepath = os.path.join("textures", "terrain_texture.json")
-        self._terrain_texture_file = StandAloneTextureFile(filepath = filepath, pack = self)
-        return self._terrain_texture_file
+    @SingleResourceDefinition(FlipbookTexturesFile)
+    def flipbook_textures_file(self): pass
 
-    @cached_property
-    def item_texture_file(self) -> StandAloneTextureFile:
-        filepath = os.path.join("textures", "item_texture.json")
-        self._item_texture_file = StandAloneTextureFile(filepath = filepath, pack = self)
-        return self._item_texture_file
+    @SingleResourceDefinition(BlocksFile)
+    def blocks_file(self): pass
 
-    @cached_property
-    def flipbook_textures_file(self) -> FlipbookTexturesFile:
-        filepath = os.path.join("textures", "flipbook_textures.json")
-        self._flipbook_textures_file = FlipbookTexturesFile(filepath = filepath, pack = self)
-        return self._flipbook_textures_file
+    @SingleResourceDefinition(BiomesClientFile)
+    def biomes_client_file(self): pass
 
-    @cached_property
-    def blocks_file(self) -> BlocksFile:
-        filepath = "blocks.json"
-        self._blocks_file = BlocksFile(filepath = filepath, pack = self)
-        return self._blocks_file
+    @SingleResourceDefinition(TerrainTextureFile)
+    def terrain_texture_file(self): pass
 
-    @cached_property
-    def biomes_client_file(self) -> BiomesClientFile:
-        filepath = "biomes_client.json"
-        self._biomes_client_file = BiomesClientFile(filepath = filepath, pack = self)
-        return self._biomes_client_file
+    @SingleResourceDefinition(ItemTextureFile)
+    def item_texture_file(self): pass

@@ -141,8 +141,8 @@ class TestDeletion(unittest.TestCase):
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
 
         # Check that the file is gone
-        with self.assertRaises(AssetNotFoundError):
-            saved_bp.get_entity('minecraft:dolphin')
+        self.assertIsNone(saved_bp.get_entity('minecraft:dolphin'))
+            
 
     def test_subresource_deletion(self):
         # Delete entity
@@ -153,8 +153,7 @@ class TestDeletion(unittest.TestCase):
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
         entity = saved_bp.get_entity('minecraft:dolphin')
 
-        with self.assertRaises(AssetNotFoundError):
-            component = entity.get_component('minecraft:type_family')
+        self.assertIsNone(entity.get_component('minecraft:type_family'))
     
     def test_list_subresource_deletion(self):
         model = self.rp.get_model('geometry.dolphin')
@@ -327,8 +326,8 @@ class TestAnimationControllerBP(unittest.TestCase):
         self.assertEqual(len(self.bp.animation_controller_files), 2)
 
         self.bp.get_animation_controller_file('animation_controllers/example.ac.json')
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_animation_controller_file('animation_controllers/dne.json')
+        self.assertIsNone(self.bp.get_animation_controller_file('animation_controllers/dne.json'))
+            
 
     def test_animation_controllers(self): 
         # From pack
@@ -352,10 +351,9 @@ class TestAnimationBP(unittest.TestCase):
         
     def test_animation_files(self):
         self.assertEqual(len(self.bp.animation_files), 1)
-
         self.bp.get_animation_file('animations/test.a.json')
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_animation_file('animations/dne.json')
+        self.assertIsNone(self.bp.get_animation_file('animations/dne.json'))
+            
 
     def test_animations(self): 
         # From pack
@@ -382,8 +380,8 @@ class TestBlockFileBP(unittest.TestCase):
         self.assertEqual(len(self.bp.blocks), 1)
 
         self.bp.get_block('namespace:block')
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_block('namespace:dne')
+        self.assertIsNone(self.bp.get_block('namespace:dne'))
+            
      
     def test_add_block(self): pass
 
@@ -394,8 +392,8 @@ class TestBlockFileBP(unittest.TestCase):
         self.assertEqual(len(self.block.components), 1)
         self.block.get_component('minecraft:destroy_time')
         
-        with self.assertRaises(AssetNotFoundError):
-            self.block.get_component('minecraft:dne')
+        self.assertIsNone(self.block.get_component('minecraft:dne'))
+            
 
         self.block.add_component("minecraft:display_name","Block")
 
@@ -421,8 +419,8 @@ class TestEntityFileBP(unittest.TestCase):
     def test_entities(self): 
         self.assertEqual(len(self.bp.entities), 2)
         self.bp.get_entity('minecraft:dolphin')
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_entity('minecraft:dne')
+
+        self.assertIsNone(self.bp.get_entity('minecraft:dne'))
 
     def test_add_entity_bp(self): pass
 
@@ -508,8 +506,8 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(self.bp.get_function('functions/kill_all_safe.mcfunction'))
         self.assertTrue(self.bp.get_function('functions/teleport/home.mcfunction'))
 
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_function('functions/no_function.mcfunction')
+        self.assertIsNone(self.bp.get_function('functions/no_function.mcfunction'))
+            
 
     def test_add_function(self): pass
 
@@ -591,9 +589,8 @@ class TestRecipes(unittest.TestCase):
         self.assertEqual(self.bp.get_recipe("minecraft:brew_awkward_blaze_powder").identifier, "minecraft:brew_awkward_blaze_powder")
         self.assertEqual(self.bp.get_recipe("minecraft:brew_splash_potion_dragon_breath").identifier, "minecraft:brew_splash_potion_dragon_breath")
         self.assertEqual(self.bp.get_recipe("minecraft:furnace_stained_hardened_clay3").identifier, "minecraft:furnace_stained_hardened_clay3")
+        self.assertIsNone(self.bp.get_recipe("dne"))
 
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_recipe('no found')
 
     def test_add_recipe_file(self): pass
 
@@ -721,10 +718,9 @@ class TestMaterials(unittest.TestCase):
 
     def test_material_files(self):
         self.assertEqual(len(self.rp.material_files), 1)
-
         self.rp.get_material_file('materials/test.material')
-        with self.assertRaises(AssetNotFoundError):
-            self.rp.get_material_file('materials/dne.material')
+        self.assertIsNone(self.rp.get_material_file('materials/dne.material'))
+            
 
     def test_materials(self):
         self.assertEqual(len(self.rp.materials), 5)
