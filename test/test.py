@@ -336,8 +336,8 @@ class TestAnimationControllerBP(unittest.TestCase):
         self.assertEqual(len(self.animation_controller_file.animation_controllers), 2)
 
         self.bp.get_animation_controller('controller.animation.test')
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_animation_controller('controller.animation.dne')
+        self.assertIsNone(self.bp.get_animation_controller('controller.animation.dne'))
+            
 
     def test_add_animation_controller_file(self): pass
 
@@ -362,8 +362,8 @@ class TestAnimationBP(unittest.TestCase):
         self.assertEqual(len(self.animation_file.animations), 1)
 
         self.bp.get_animation('animation.test')
-        with self.assertRaises(AssetNotFoundError):
-            self.bp.get_animation('animation.dne')
+        self.assertIsNone(self.bp.get_animation('animation.dne'))
+           
 
     def test_add_animation_file(self): pass
 
@@ -395,7 +395,7 @@ class TestBlockFileBP(unittest.TestCase):
         self.assertIsNone(self.block.get_component('minecraft:dne'))
             
 
-        self.block.add_component("minecraft:display_name","Block")
+        self.block.add_component(id="minecraft:display_name", data="Block")
 
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
 
@@ -415,7 +415,7 @@ class TestEntityFileBP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
         self.entity = self.bp.get_entity('minecraft:dolphin')
-    
+
     def test_entities(self): 
         self.assertEqual(len(self.bp.entities), 2)
         self.bp.get_entity('minecraft:dolphin')
@@ -440,14 +440,14 @@ class TestEntityFileBP(unittest.TestCase):
 
         # Test adding component group by name and data
         component_group_data = { "minecraft:damage" : { "value" : 1 } }
-        component_group = self.entity.add_component_group('group:one', component_group_data)
+        component_group = self.entity.add_component_group(id='group:one', data=component_group_data)
         self.assertEqual(component_group.id, 'group:one')
         self.assertEqual(len(self.entity.component_groups), 8)
 
         # Test adding component group by class
         group = ComponentGroup(data={}, parent=self.entity, json_path='minecraft:entity/component_groups/group:two')
 
-        added_group = self.entity.add_component_group(group)
+        added_group = self.entity.add_component_group(resource=group)
         self.assertEqual(added_group.id, 'group:two')
         self.assertEqual(len(self.entity.component_groups), 9)
 
@@ -466,7 +466,7 @@ class TestEntityFileBP(unittest.TestCase):
 
         # Add to components
         component_data = { "value" : 1 }
-        self.entity.add_component("minecraft:damage", component_data)
+        self.entity.add_component(id="minecraft:damage", data=component_data)
 
         saved_bp, saved_rp = save_and_return_packs(bp=self.bp)
 
@@ -726,8 +726,8 @@ class TestMaterials(unittest.TestCase):
         self.assertEqual(len(self.rp.materials), 5)
 
         self.rp.get_material('dolphin')
-        with self.assertRaises(AssetNotFoundError):
-            self.rp.get_material('dne')
+        self.assertIsNone(self.rp.get_material('dne'))
+            
 
     def test_add_material_file(self): pass
 
@@ -756,7 +756,6 @@ class TestMaterialTriple(unittest.TestCase):
         self.assertEqual(material.shortname, 'default')
         self.assertEqual(material.resource.id, 'dolphin')
         self.assertEqual(material.identifier, 'dolphin')
-        self.assertEqual(material.exists(), True)
 
     def test_missing_resources(self):
         """
@@ -771,10 +770,8 @@ class TestMaterialTriple(unittest.TestCase):
 
         self.assertEqual(material.shortname, 'ghost')
         self.assertEqual(material.identifier, 'guardian_ghost')
-        self.assertEqual(material.exists(), False)
-
-        with self.assertRaises(AssetNotFoundError):
-            material.resource
+        self.assertIsNone(material.resource)
+            
     
 class TestModels(unittest.TestCase):
     def setUp(self) -> None:
@@ -851,7 +848,7 @@ class TestRenderControllers(unittest.TestCase):
 
         # Original length
         self.assertEqual(len(self.rp.render_controllers), 2)
-        rc = rcf.add_render_controller('controller.render.test', {})
+        rc = rcf.add_render_controller(id='controller.render.test', data={})
 
         # After adding the render controller
         self.assertEqual(len(self.rp.render_controllers), 3)
@@ -951,7 +948,6 @@ class TestAnimationTriple(unittest.TestCase):
         self.assertEqual(animation.shortname, 'move')
         self.assertEqual(animation.resource.id, 'animation.dolphin.move')
         self.assertEqual(animation.identifier, 'animation.dolphin.move')
-        self.assertEqual(animation.exists(), True)
 
     def test_missing_resources(self):
         """
@@ -966,10 +962,7 @@ class TestAnimationTriple(unittest.TestCase):
 
         self.assertEqual(animation.shortname, 'missing')
         self.assertEqual(animation.identifier, 'animation.guardian.missing')
-        self.assertEqual(animation.exists(), False)
-
-        with self.assertRaises(AssetNotFoundError):
-            animation.resource
+        self.assertIsNone(animation.resource)
 
     def test_saving(self):
         """

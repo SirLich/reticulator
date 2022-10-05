@@ -164,6 +164,7 @@ def ResourceDefinition(cls : T):
         return wrapper
     return decorator
 
+
 def SingleResourceDefinition(cls : T):
     """Inserts implementation for JsonFileResource (single)"""
 
@@ -231,7 +232,7 @@ def ChildGetter(parent_cls : Any, child_cls : T):
                 for grandchild in getattr(child, child_attribute):
                     if smart_compare(getattr(grandchild, getter_attribute), compare):
                         return grandchild
-                raise AssetNotFoundError(compare)
+                return None
         return wrapper
     return decorator
     
@@ -244,22 +245,34 @@ def SubResourceAdder(cls : Resource):
 
     def decorator_sub_resource(func):
         @functools.wraps(func)
-        def wrapper_sub_resource(self, *args):
+        def wrapper_sub_resource(self, *args, **kwargs):
             # This handles the case where a class is passed in directly.
             # like `add_box(Box(..))``
-            if len(args) == 1 and isinstance(args[0], cls):
-                new_object = args[0]
 
+            if len(args) > 0:
+                raise ReticulatorException("This function can only be called with keyword arguments: 'resource' (alone), or 'id' and 'data'")
+
+            if kwargs.get('resource') == None and (kwargs.get('id') == None or kwargs.get('data') == None):
+                raise ReticulatorException("This function can only be called with 'resource' OR 'id and 'data'.")
+
+            # Handle Object case
+            if new_object := kwargs.get('resource'):
                 self.set_jsonpath(new_object.json_path, new_object.data)
                 new_object.parent = self
 
             # This handles the 'normal' flow, where arguments are passed in
             # via 'parts' and are constructed automatically.
             else:
-                name = args[0]
-                data = args[1]
+                id = kwargs.get('id')
+                data = kwargs.get('data')
 
-                new_jsonpath = jsonpath + "/" + name
+                if id == None:
+                    raise ReticulatorException("Id may not be None.")
+
+                if data == None:
+                    raise ReticulatorException("Data may not be None")
+
+                new_jsonpath = jsonpath + "/" + id
                 self.set_jsonpath(new_jsonpath, data)
                 new_object = cls(data=data, parent=self, json_path=new_jsonpath)
 
@@ -272,6 +285,39 @@ def SubResourceAdder(cls : Resource):
 
         return wrapper_sub_resource
     return decorator_sub_resource
+
+# def ResourceAdder(cls : Resource):
+#     filepath = cls.type_info.filepath
+#     attribute = cls.type_info.attribute
+
+#     def decorator_sub_resource(func):
+#         @functools.wraps(func)
+#         def wrapper_sub_resource(self, *args):
+#             # This handles the case where a class is passed in directly.
+#             # like `add_box(Box(..))``
+#             if len(args) == 1 and isinstance(args[0], cls):
+#                 args[0].pack = self
+
+#             # This handles the 'normal' flow, where arguments are passed in
+#             # via 'parts' and are constructed automatically.
+#             else:
+#                 name = args[0]
+#                 data = args[1]
+
+#                 new_jsonpath = jsonpath + "/" + name
+#                 self.set_jsonpath(new_jsonpath, data)
+#                 new_object = cls(data=data, parent=self, json_path=new_jsonpath)
+            
+#             # Last step is adding the new object to the attribute
+#             if new_object:
+#                 getattr(self, attribute).append(new_object)
+#                 return new_object
+#             else:
+#                 raise ReticulatorException()
+
+
+#         return wrapper_sub_resource
+#     return decorator_sub_resource
 
 # Methods
 def create_nested_directory(path: str):
@@ -1806,6 +1852,27 @@ class FlipbookTexturesFile(JsonFileResource):
     )
 
 
+class FogDistanceComponent(JsonSubResource):
+    type_info = TypeInfo(
+        jsonpath = "minecraft:fog_settings/distance",
+        attribute = "distance_components",
+        getter_attribute = "id"
+    )
+
+class FogVolumetricDensityComponent(JsonSubResource):
+    type_info = TypeInfo(
+        jsonpath = "minecraft:fog_settings/volumetric/density",
+        attribute = "volumetric_density_components",
+        getter_attribute = "id"
+    )
+
+class FogVolumetricMediaCoefficient(JsonSubResource):
+    type_info = TypeInfo(
+        jsonpath = "minecraft:fog_settings/volumetric/media_coefficients",
+        attribute = "volumetric_media_coefficients",
+        getter_attribute = "id"
+    )
+
 @format_version()
 @identifier("minecraft:fog_settings/description/identifier")
 class FogFile(JsonFileResource):
@@ -1816,48 +1883,27 @@ class FogFile(JsonFileResource):
         attribute = "fogs",
         getter_attribute = "identifier"
     )
-    
-    def __init__(self, data: dict = None, filepath: str = None, pack: Pack = None) -> None:
-        super().__init__(data = data, filepath = filepath, pack = pack)
-        self.__distance_components: list[Component] = []
-        self.__volumetric_density_components: list[Component] = []
-        self.__volumetric_media_coefficients: list[Component] = []
 
-    @cached_property
-    def distance_components(self) -> list[Component]:
-        for path, data in self.get_data_at("minecraft:fog_settings/distance"):
-            self.__distance_components.append(Component(parent = self, json_path = path, data = data))
-        return self.__distance_components
+    @SubResourceDefinition(FogDistanceComponent)
+    def distance_components(self): pass
+    @Getter(FogDistanceComponent)
+    def get_distance_component(self, id: str): pass
+    @SubResourceAdder(FogDistanceComponent)
+    def add_distance_component(self, name: str, data: dict): pass
 
-    @cached_property
-    def volumetric_density_components(self) -> list[Component]:
-        for path, data in self.get_data_at("minecraft:fog_settings/volumetric/density"):
-            self.__volumetric_density_components.append(Component(parent = self, json_path = path, data = data))
-        return self.__volumetric_density_components
+    @SubResourceDefinition(FogVolumetricDensityComponent)
+    def volumetric_density_components(self): pass
+    @Getter(FogVolumetricDensityComponent)
+    def get_volumetric_density_component(self, id: str): pass
+    @SubResourceAdder(FogVolumetricDensityComponent)
+    def add_volumetric_density_component(self, name: str, data: dict): pass
 
-    @cached_property
-    def volumetric_media_coefficients(self) -> list[Component]:
-        for path, data in self.get_data_at("minecraft:fog_settings/volumetric/media_coefficients"):
-            self.__volumetric_media_coefficients.append(Component(parent = self, json_path = path, data = data))
-        return self.__volumetric_media_coefficients
-
-    def get_distance_component(self, id:str) -> Component:
-        for child in self.distance_components:
-            if smart_compare(child.id, id):
-                return child
-        raise AssetNotFoundError(f"Distance component with id '{id}' not found.")
-
-    def get_volumetric_density_component(self, id:str) -> Component:
-        for child in self.distance_components:
-            if smart_compare(child.id, id):
-                return child
-        raise AssetNotFoundError(f"Volumetric density component with id '{id}' not found.")
-
-    def get_volumetric_media_coefficient(self, id:str) -> Component:
-        for child in self.volumetric_media_coefficients:
-            if smart_compare(child.id, id):
-                return child
-        raise AssetNotFoundError(f"volumetric media coefficient component with id '{id}' not found.")
+    @SubResourceDefinition(FogVolumetricMediaCoefficient)
+    def volumetric_media_coefficients(self): pass
+    @Getter(FogVolumetricMediaCoefficient)
+    def get_volumetric_media_coefficient(self, id: str): pass
+    @SubResourceAdder(FogVolumetricMediaCoefficient)
+    def add_volumetric_media_coefficient(self, name: str, data: dict): pass
 
 class ItemComponentRP(JsonSubResource):
     type_info = TypeInfo(
@@ -2065,15 +2111,16 @@ class ItemTextureFile(StandAloneTextureFile):
         attribute = "item_texture_file"
     )
     
-class MaterialTriple(JsonSubResource):
-    """
-    A special sub-resource, which represents a material within an RP entity.
-    """
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
 
+class ResourceTriple(JsonSubResource):
+    """
+    Base class for handling "shortname": "identifier" pairs, with an underlying, resource.
+    """
     @property
     def shortname(self):
+        """
+        This represents the shortname of the resource. e.g., "shortname": "identifier"
+        """
         return self.id
 
     @shortname.setter
@@ -2082,99 +2129,49 @@ class MaterialTriple(JsonSubResource):
     
     @property
     def identifier(self):
+        """
+        This represents the identifier of the resource. e.g., "shortname": "identifier"
+        """
         return self.data
     
     @identifier.setter
     def identifier(self, identifier):
         self.data = identifier
 
-    @cached_property
+    def resource():
+        """
+        Returns the identifier associated with the resource.
+        """
+        raise NotImplementedError
+
+class MaterialTriple(ResourceTriple):
+    """
+    A special sub-resource, which represents a material within an RP entity.
+    """
+
+    @property
     def resource(self):
         return self.parent.pack.get_material(self.identifier)
-    
-    def exists(self):
-        try:
-            self.parent.pack.get_material(self.identifier)
-            return True
-        except AssetNotFoundError:
-            return False
 
 
-class AnimationTriple(JsonSubResource):
+class AnimationTriple(ResourceTriple):
     """
     A special sub-resource, which represents an animation within an RP entity.
     """
 
     @property
-    def shortname(self):
-        return self.id
-
-    @shortname.setter
-    def shortname(self, shortname):
-        self.id = shortname
-    
-    @property
-    def identifier(self):
-        return self.data
-    
-    @identifier.setter
-    def identifier(self, identifier):
-        self.data = identifier
-
-    @cached_property
     def resource(self):
         return self.parent.pack.get_animation(self.identifier)
     
-    def exists(self):
-        """
-        Whether the animation described by this triple exists.
-        Can be used to detect if a entity is referencing a missing animation.
-        """
-        try:
-            self.parent.pack.get_animation(self.identifier)
-            return True
-        except AssetNotFoundError:
-            return False
-
-
-class ModelTriple(JsonSubResource):
+class ModelTriple(ResourceTriple):
     """
     A special sub-resource, which represents a model within an RP entity.
     """
-    def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
-        super().__init__(data=data, parent=parent, json_path=json_path)
 
     @property
-    def shortname(self):
-        return self.id
-
-    @shortname.setter
-    def shortname(self, shortname):
-        self.id = shortname
-    
-    @property
-    def identifier(self):
-        return self.data
-    
-    @identifier.setter
-    def identifier(self, identifier):
-        self.data = identifier
-
-    @cached_property
     def resource(self):
         return self.parent.pack.get_model(self.identifier)
     
-    def exists(self):
-        """
-        Whether the model described by this triple exists.
-        Can be used to detect if a entity is referencing a missing model.
-        """
-        try:
-            self.parent.pack.get_model(self.identifier)
-            return True
-        except AssetNotFoundError:
-            return False
-
 
 class TextureDouble(JsonSubResource):
     """
