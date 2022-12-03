@@ -790,6 +790,21 @@ class JsonResource(Resource):
         self.dirty = True
         return data
 
+    def append_jsonpath(self, json_path:str, insert_value:Any):
+        """
+        Appends a value at jsonpath location. Will create path if it doesn't exist.
+        """
+
+        path_exists = self.jsonpath_exists(json_path)
+
+        # Otherwise, set the value
+        self.dirty = True
+
+        if path_exists:
+            self.get_jsonpath(json_path).append(insert_value)
+        else:
+            self.set_jsonpath(json_path, [insert_value])
+
     def set_jsonpath(self, json_path:str, insert_value:any, overwrite:bool=True):
         """
         Sets value at jsonpath location.
@@ -1302,7 +1317,7 @@ class EntityComponentBP(JsonSubResource):
 
 class EntityEventBP(JsonSubResource):
     type_info = TypeInfo(
-        jsonpath = "minecraft:entity/events/",
+        jsonpath = "minecraft:entity/events",
         attribute = "events",
         getter_attribute = "id"
     )
