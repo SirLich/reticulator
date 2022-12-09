@@ -10,7 +10,7 @@ from pathlib import Path
 from functools import cached_property
 from typing import Union, Tuple, TypeVar, Any
 
-import dpath.util
+import dpath
 
 NO_ARGUMENT = object()
 TEXTURE_EXTENSIONS = ["png", "jpg", "jpeg", "tga"]
@@ -777,7 +777,7 @@ class JsonResource(Resource):
         path_exists = self.jsonpath_exists(json_path)
         if path_exists:
             self.dirty = True
-            dpath.util.delete(self.data, json_path)
+            dpath.delete(self.data, json_path)
 
     def pop_jsonpath(self, json_path, default=NO_ARGUMENT) \
         -> Union[dict, list, int, str, float]:
@@ -821,7 +821,7 @@ class JsonResource(Resource):
 
         # Otherwise, set the value
         self.dirty = True
-        dpath.util.new(self.data, json_path, insert_value)
+        dpath.new(self.data, json_path, insert_value)
         
 
     def get_jsonpath(self, json_path, default=NO_ARGUMENT):
@@ -834,7 +834,7 @@ class JsonResource(Resource):
             AssetNotFoundError if the path does not exist.
         """
         try:
-            return dpath.util.get(self.data, json_path)
+            return dpath.get(self.data, json_path)
         except Exception as exception:
             if default is not NO_ARGUMENT:
                 return default

@@ -82,9 +82,11 @@
  - Added `ItemEventBP` + methods in `ItemFileBP`
  - Allowed JsonFileResources to function when they are created free of a pack
 
-# 0.1.2-beta
+# 0.1.2
  - Introduced a new @SingleResourceDefinition decorator
  - Fixed intellisense for @identifier, @format_version, and @ClassProperty
  - Child Getters now return 'None' instead of throwing an error
  - Streamlined the 'Triple' system, and removed 'exists()', since you can just check for None
  - Switched all 'adders' to use kwargs
+ - Switched to 'pyproject.toml'
+ - Added 'append_jsonpath' 

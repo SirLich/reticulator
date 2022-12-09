@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reticulator"
+license = "MIT"
+author = "SirLich"
+author_email = "SirLich.business@gmail.com"
+version = '0.1.2-beta'
+description = "Reticulator is a library for interacting with Minecraft Bedrock Add-ons programmatically."
+readme = "readme.md"
+keywords = ["MINECRAFT", "BEDROCK-EDITION", "BEDROCK-ADDONS"]
+license = {text = "BSD 3-Clause License"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "dpath==2.1.2"
+]

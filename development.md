@@ -2,7 +2,6 @@
 
  - Create all your changes
  - Create + Run Tests
- <!-- - Run `generator.py`  -->
  - Set version in `setup.py`
  - Commit and push everything
  - Tag the repository: `git tag -a v0.0.13-beta`
