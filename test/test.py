@@ -12,7 +12,7 @@ def get_packs() -> Tuple[BehaviorPack, ResourcePack]:
     project.set_output_directory('out')
     return project.get_packs()
 
-def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, force: bool = False):
+def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, force: bool = False) -> Tuple[ResourcePack, BehaviorPack]:
     # Prepare folder location
     prepare_output_directory()
 
