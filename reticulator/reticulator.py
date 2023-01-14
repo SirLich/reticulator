@@ -118,6 +118,10 @@ def ImplementsResource(*args : JsonFileResource):
             def get_x(parent_cls, id: str): pass
             setattr(parent_cls, f"get_{attribute}", get_x)
 
+            @ResourceAdder(sub_cls)
+            def add_x(parent_cls, filepath: str, data: dict): pass
+            setattr(parent_cls, f"add_{attribute}", add_x)
+
             child_cls = cls_type_info.child_cls
             if child_cls != None:
                 @JsonChildResource(sub_cls, child_cls)
@@ -310,7 +314,29 @@ def ChildGetter(parent_cls : Any, child_cls : T):
                 return None
         return wrapper
     return decorator
-    
+
+def ResourceAdder(cls : Resource):
+    """
+    This decorator allows you to inject SubResources into your Resources.
+    """
+    base_filepath = cls.type_info.filepath
+    attribute = cls.type_info.plural
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, filepath, data):
+            new_filepath = base_filepath + "/" + filepath
+            new_object = cls(data=data, pack=self, filepath=new_filepath)
+
+            if new_object:
+                getattr(self, attribute).append(new_object)
+                return new_object
+            else:
+                raise ReticulatorException()
+
+        return wrapper
+    return decorator
+
 def SubResourceAdder(cls : Resource):
     """
     This decorator allows you to inject SubResources into your Resources.
@@ -360,39 +386,6 @@ def SubResourceAdder(cls : Resource):
 
         return wrapper_sub_resource
     return decorator_sub_resource
-
-# def ResourceAdder(cls : Resource):
-#     filepath = cls.type_info.filepath
-#     attribute = cls.type_info.attribute
-
-#     def decorator_sub_resource(func):
-#         @functools.wraps(func)
-#         def wrapper_sub_resource(self, *args):
-#             # This handles the case where a class is passed in directly.
-#             # like `add_box(Box(..))``
-#             if len(args) == 1 and isinstance(args[0], cls):
-#                 args[0].pack = self
-
-#             # This handles the 'normal' flow, where arguments are passed in
-#             # via 'parts' and are constructed automatically.
-#             else:
-#                 name = args[0]
-#                 data = args[1]
-
-#                 new_jsonpath = jsonpath + "/" + name
-#                 self.set_jsonpath(new_jsonpath, data)
-#                 new_object = cls(data=data, parent=self, json_path=new_jsonpath)
-            
-#             # Last step is adding the new object to the attribute
-#             if new_object:
-#                 getattr(self, attribute).append(new_object)
-#                 return new_object
-#             else:
-#                 raise ReticulatorException()
-
-
-#         return wrapper_sub_resource
-#     return decorator_sub_resource
 
 # Methods
 def create_nested_directory(path: str):

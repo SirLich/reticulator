@@ -423,7 +423,13 @@ class TestEntityFileBP(unittest.TestCase):
 
         self.assertIsNone(self.bp.get_entity('minecraft:dne'))
 
-    def test_add_entity_bp(self): pass
+    def test_add_entity_bp(self):
+        data = {"foo": "bar"}
+
+        self.assertEqual(len(self.bp.entities), 2)
+        entity = self.bp.add_entity("path", data)
+        self.assertEqual(data, entity.data)
+        self.assertEqual(len(self.bp.entities), 3)
 
     def test_entity_bp_properties(self):
         self.assertEqual(self.entity.identifier,'minecraft:dolphin')
