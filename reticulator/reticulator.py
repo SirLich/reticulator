@@ -22,14 +22,27 @@ class TypeInfo:
     """
     Class for encapsulating the arguments that are passed to sub-resource based
     decorators.
+
+    :jsonpath: The jsonpath, from where this resource can be located
+    :child_cls: The class of the resource which can be accessed from this resource
+        For example `AnimationRP` can be accessed from `AnimationFileRP`
     """
     
-    def __init__(self, *, jsonpath="", filepath="", attribute="", getter_attribute="", extension=".json"):
+    def __init__(self, *, jsonpath="", filepath="", attribute="", getter_attribute="", extension=".json", plural=None, child_cls=None):
         self.jsonpath = jsonpath
         self.filepath = filepath
         self.attribute = attribute
+
+        if plural == None:
+            self.plural = attribute + "s"
+        else:
+            self.plural = plural
+        self.child_cls = child_cls
         self.getter_attribute = getter_attribute
         self.extension = extension
+
+    def __repr__(self) -> str:
+        return "TypeInfo: " +  str(vars(self))
 
 
 def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Union[NotifyDict, NotifyList]:
@@ -88,6 +101,67 @@ def identifier(jsonpath: str):
     return inner
 
 
+def ImplementsResource(*args : JsonFileResource):
+    def inner(parent_cls):
+        for sub_cls in args:
+            cls_type_info : TypeInfo = sub_cls.type_info
+
+            attribute = cls_type_info.attribute
+            plural = cls_type_info.plural
+
+            @ResourceDefinition(sub_cls)
+            def x(parent_cls): pass
+            setattr(parent_cls, plural, x)
+            x.__set_name__(parent_cls, plural) # See: CachedProperty docs.
+
+            @Getter(sub_cls)
+            def get_x(parent_cls, id: str): pass
+            setattr(parent_cls, f"get_{attribute}", get_x)
+
+            child_cls = cls_type_info.child_cls
+            if child_cls != None:
+                @JsonChildResource(sub_cls, child_cls)
+                def child_x(self): pass
+                setattr(parent_cls, child_cls.type_info.plural, child_x)
+
+                @ChildGetter(sub_cls, child_cls)
+                def get_child_x(self, id: str): pass
+                setattr(parent_cls, f"get_{child_cls.type_info.attribute}", get_child_x)
+
+        return parent_cls
+
+    return inner
+
+
+def ImplementsSubResource(*args : JsonSubResource):
+    """
+    Class Decorator which interjects functions to deal with subresources.
+    """
+
+    def inner(parent_cls):
+        for sub_cls in args:
+            cls_type_info : TypeInfo = sub_cls.type_info
+
+            attribute = cls_type_info.attribute
+            plural = cls_type_info.plural
+
+            @SubResourceDefinition(sub_cls)
+            def components(parent_cls): pass
+            setattr(parent_cls, plural, components)
+            components.__set_name__(parent_cls, plural)
+
+            @Getter(sub_cls)
+            def get_x(parent_cls, id: str): pass
+            setattr(parent_cls, f"get_{attribute}", get_x)
+
+            @SubResourceAdder(sub_cls)
+            def add_x(parent_cls, name: str, data: dict): pass
+            setattr(parent_cls, f"add_{attribute}", add_x)
+
+        return parent_cls
+
+    return inner
+
 def ClassProperty(attribute: str, jsonpath: str = NO_ARGUMENT):
     """
     Class Decorator which injects a single 'property' with proper semantics.
@@ -126,13 +200,13 @@ def JsonChildResource(parent_cls: Resource, child_cls: T):
     NOT CACHED
     """
     
-    parent_attribute = parent_cls.type_info.attribute
-    child_attribute = child_cls.type_info.attribute
+    parent_attribute = parent_cls.type_info.plural
+    child_attribute = child_cls.type_info.plural
 
-    def decorator(func) -> cached_property[List[T]]:
+    def decorator(func) -> cached_property[list[T]]:
         @property
         @functools.wraps(func)
-        def wrapper(self) -> List[T]:
+        def wrapper(self) -> list[T]:
             sub_resources = []
             for file_resource in getattr(self, parent_attribute):
                 for sub_resource in getattr(file_resource, child_attribute):
@@ -185,15 +259,16 @@ def SingleResourceDefinition(cls : T):
 
 def SubResourceDefinition(cls: T):
     jsonpath = cls.type_info.jsonpath
-    attribute = cls.type_info.attribute
+    attribute_plural = cls.type_info.plural
+
     def decorator(func) -> cached_property[list[T]]:
         @cached_property
         @functools.wraps(func)
         def wrapper(self) -> list[T]:
-            setattr(self, attribute, [])
+            setattr(self, attribute_plural, [])
             for path, data in self.get_data_at(jsonpath):
-                getattr(self, attribute).append(cls(parent = self, json_path = path, data = data))
-            return getattr(self, attribute)
+                getattr(self, attribute_plural).append(cls(parent = self, json_path = path, data = data))
+            return getattr(self, attribute_plural)
         return wrapper
     return decorator
 
@@ -203,12 +278,12 @@ def Getter(cls : T):
     Decorator which allows you to get a resource. For example getting a component
     from an entity.
     """
-    attribute = cls.type_info.attribute
+    attribute_plural = cls.type_info.plural
     getter_attribute = cls.type_info.getter_attribute
     def decorator(func) -> T:
         @functools.wraps(func)
         def wrapper(self, compare):
-            for child in getattr(self, attribute):
+            for child in getattr(self, attribute_plural):
                 if smart_compare(getattr(child, getter_attribute), compare):
                     return child
             return None # No longer raises an error. Allow a getter to return none.
@@ -222,8 +297,8 @@ def ChildGetter(parent_cls : Any, child_cls : T):
     For example getting 'animations' directly from the RP without passing
     through the AnimationFile class.
     """
-    parent_attribute = parent_cls.type_info.attribute
-    child_attribute = child_cls.type_info.attribute
+    parent_attribute = parent_cls.type_info.plural
+    child_attribute = child_cls.type_info.plural
     getter_attribute = child_cls.type_info.getter_attribute
     def decorator(func) -> T:
         @functools.wraps(func)
@@ -241,7 +316,7 @@ def SubResourceAdder(cls : Resource):
     This decorator allows you to inject SubResources into your Resources.
     """
     jsonpath = cls.type_info.jsonpath
-    attribute = cls.type_info.attribute
+    attribute = cls.type_info.plural
 
     def decorator_sub_resource(func):
         @functools.wraps(func)
@@ -1194,26 +1269,21 @@ class FormatVersion():
 class AnimationControllerBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "animation_controllers",
-        attribute = "animation_controllers",
+        attribute = "animation_controller",
         getter_attribute = "id"
     )
 
 @format_version()
+@ImplementsSubResource(
+    AnimationControllerBP
+)
 class AnimationControllerFileBP(JsonFileResource):
-
-    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "animation_controllers",
-        attribute = "animation_controller_files",
-        getter_attribute = "filepath"
+        attribute = "animation_controller_file",
+        getter_attribute = "filepath",
+        child_cls = AnimationControllerBP
     )
-
-    @SubResourceDefinition(AnimationControllerBP)
-    def animation_controllers(self): pass
-    @Getter(AnimationControllerBP)
-    def get_animation_controller(self, id: str): pass
-    @SubResourceAdder(AnimationControllerBP)
-    def add_animation_controller(self, name: str, data: dict): pass
 
 
 class FunctionFile(FileResource):
@@ -1230,7 +1300,7 @@ class FunctionFile(FileResource):
     type_info = TypeInfo(
         filepath = "functions",
         extension = ".mcfunction",
-        attribute = "functions",
+        attribute = "function",
         getter_attribute="filepath"
     )
     
@@ -1267,93 +1337,87 @@ class FunctionFile(FileResource):
 @identifier("minecraft:feature_rules/description/identifier")
 @format_version()
 class FeatureRuleFile(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "feature_rules",
-        attribute = "feature_rules",
+        attribute = "feature_rule",
         getter_attribute="identifier"
     )
 
 @identifier("**/description/identifier")
 @format_version()
 class FeatureFile(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "features",
-        attribute = "features",
+        attribute = "feature",
         getter_attribute="identifier"
     )
     
 @format_version()
 @identifier("minecraft:spawn_rules/description/identifier")
 class SpawnRuleFile(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "spawn_rules",
-        attribute = "spawn_rules",
+        attribute = "spawn_rule",
         getter_attribute="identifier"
     )
 
 @identifier("**/identifier")
 @format_version()
 class RecipeFile(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "recipes",
-        attribute = "recipes",
+        attribute = "recipe",
         getter_attribute="identifier"
     )
 
 class EntityComponentBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:entity/components",
-        attribute = "components",
+        attribute = "component",
         getter_attribute = "id"
     )
 
 class EntityEventBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:entity/events",
-        attribute = "events",
+        attribute = "event",
         getter_attribute = "id"
     )
 
 class Component(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "**",
-        attribute = "components",
+        attribute = "component",
         getter_attribute = "id"
     )
 
+@ImplementsSubResource(
+    Component
+)
 class ComponentGroup(JsonSubResource):
     """
     A component group is a collection of components in an EntityFileBP.
     """
     type_info = TypeInfo(
         jsonpath = "minecraft:entity/component_groups",
-        attribute = "component_groups",
+        attribute = "component_group",
         getter_attribute = "id"
     )
 
-    @SubResourceDefinition(Component)
-    def components(self): pass
-    @Getter(Component)
-    def get_component(self, id: str): pass
-    @SubResourceAdder(Component)
-    def add_component(self, name: str, data: dict): pass
-
 @format_version()
 @identifier("minecraft:entity/description/identifier")
+@ImplementsSubResource(
+    EntityEventBP, 
+    EntityComponentBP, 
+    ComponentGroup
+)
 class EntityFileBP(JsonFileResource):
     format_version : FormatVersion
     identifier: str
     type_info = TypeInfo(
         filepath = "entities",
-        attribute = "entities",
+        attribute = "entity",
+        plural = "entities",
         getter_attribute = "identifier"
     )
 
@@ -1361,200 +1425,102 @@ class EntityFileBP(JsonFileResource):
     def counterpart(self) -> EntityFileRP:
         return self.pack.project.resource_pack.get_entity(self.identifier)
 
-    @SubResourceDefinition(EntityEventBP)
-    def events(self): pass
-    @Getter(EntityEventBP)
-    def get_event(self, id: str): pass
-    @SubResourceAdder(EntityEventBP)
-    def add_event(self, name: str, data: dict): pass
-
-    @SubResourceDefinition(EntityComponentBP)
-    def components(self): pass
-    @Getter(EntityComponentBP)
-    def get_component(self, id: str): pass
-    @SubResourceAdder(EntityComponentBP)
-    def add_component(self, name: str, data: dict): pass
-
-    @SubResourceDefinition(ComponentGroup)
-    def component_groups(self): pass
-    @Getter(ComponentGroup)
-    def get_component_group(self, id: str): pass
-    @SubResourceAdder(ComponentGroup)
-    def add_component_group(self, name: str, data: dict): pass
-
 class LootTablePool(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "pools",
-        attribute = "pools"
+        attribute = "pool"
     )
 
+@ImplementsSubResource(
+    LootTablePool
+)
 class LootTableFile(JsonFileResource):
     type_info = TypeInfo(
         filepath = "loot_tables",
-        attribute = "loot_tables",
+        attribute = "loot_table",
         getter_attribute = "filepath"
     )
-
-    @SubResourceDefinition(LootTablePool)
-    def pools(self): pass
 
 class ItemComponentBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:item/components",
-        attribute = "components",
+        attribute = "component",
         getter_attribute = "id"
     )
 
 class ItemEventBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:item/events",
-        attribute = "events",
+        attribute = "event",
         getter_attribute = "id"
     )
 
 
 @format_version()
 @identifier("minecraft:item/description/identifier")
+@ImplementsSubResource(
+    ItemComponentBP, 
+    ItemEventBP
+)
 class ItemFileBP(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "items",
-        attribute = "items",
+        attribute = "item",
         getter_attribute = "identifier"
     )
-
-    @SubResourceDefinition(ItemComponentBP)
-    def components(self): pass
-    @Getter(ItemComponentBP)
-    def get_component(self, id: str): pass
-    @SubResourceAdder(ItemComponentBP)
-    def add_component(self, name: str, data: dict): pass
-
-    @SubResourceDefinition(ItemEventBP)
-    def events(self): pass
-    @Getter(ItemEventBP)
-    def get_event(self, id: str): pass
-    @SubResourceAdder(ItemEventBP)
-    def add_event(self, name: str, data: dict): pass
-
 
 class BlockFileComponentBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:block/components",
-        attribute = "components",
+        attribute = "component",
         getter_attribute = "id"
     )
 
 
 @format_version()
 @identifier(jsonpath="minecraft:block/description/identifier")
+@ImplementsSubResource(BlockFileComponentBP)
 class BlockFileBP(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "blocks",
-        attribute = "blocks",
+        attribute = "block",
         getter_attribute = "identifier"
     )
-
-    @SubResourceDefinition(BlockFileComponentBP)
-    def components(self): pass
-    @Getter(BlockFileComponentBP)
-    def get_component(self, id: str): pass
-    @SubResourceAdder(BlockFileComponentBP)
-    def add_component(self, name: str, data: dict): pass
 
 @ClassProperty('loop')
 class AnimationBP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "animations",
-        attribute = "animations",
+        attribute = "animation",
         getter_attribute = "id"
     )
 
+@ImplementsSubResource(AnimationBP)
 class AnimationFileBP(JsonFileResource):
     type_info = TypeInfo(
         filepath = "animations",
-        attribute = "animation_files",
-        getter_attribute = "filepath"
+        attribute = "animation_file",
+        getter_attribute = "filepath",
+        child_cls=AnimationBP
     )
 
-    @SubResourceDefinition(AnimationBP)
-    def animations(self): pass
-    @SubResourceAdder(AnimationBP)
-    def add_animation(self, name: str, data: dict): pass
-    @Getter(AnimationBP)
-    def get_animation(self, id: str): pass
-
+@ImplementsResource(
+    FunctionFile,
+    FeatureRuleFile,
+    FeatureFile,
+    SpawnRuleFile,
+    RecipeFile,
+    EntityFileBP,
+    LootTableFile,
+    ItemFileBP,
+    BlockFileBP,
+    AnimationControllerFileBP,
+    AnimationFileBP
+)
 class BehaviorPack(Pack):
     """
     The BehaviorPack represents the behavior pack of a project.
     """
-
-    @ResourceDefinition(AnimationControllerFileBP)
-    def animation_controller_files(self): pass
-    @Getter(AnimationControllerFileBP)
-    def get_animation_controller_file(self, filepath: str): pass
-    @JsonChildResource(AnimationControllerFileBP, AnimationControllerBP)
-    def animation_controllers(self): pass
-    @ChildGetter(AnimationControllerFileBP, AnimationControllerBP)
-    def get_animation_controller(self, id: str): pass
-
-    @ResourceDefinition(AnimationFileBP)
-    def animation_files(self): pass
-    @Getter(AnimationFileBP)
-    def get_animation_file(self, filepath: str): pass
-    @JsonChildResource(AnimationFileBP, AnimationBP)
-    def animations(self): pass
-    @ChildGetter(AnimationFileBP, AnimationBP)
-    def get_animation(self, id: str): pass
-
-    @ResourceDefinition(FunctionFile)
-    def functions(self): pass
-    @Getter(FunctionFile)
-    def get_function(self, filepath: str): pass
-
-    @ResourceDefinition(FeatureRuleFile)
-    def feature_rules(self): pass
-    @Getter(FeatureRuleFile)
-    def get_feature_rule(self, identifier: str): pass
-
-    @ResourceDefinition(FeatureFile)
-    def features(self): pass
-    @Getter(FeatureFile)
-    def get_feature(self, identifier: str): pass
-
-    @ResourceDefinition(SpawnRuleFile)
-    def spawn_rules(self): pass
-    @Getter(SpawnRuleFile)
-    def get_spawn_rule(self, identifier: str): pass
-
-    @ResourceDefinition(RecipeFile)
-    def recipes(self): pass
-    @Getter(RecipeFile)
-    def get_recipe(self, identifier: str): pass
-
-    @ResourceDefinition(EntityFileBP)
-    def entities(self): pass
-    @Getter(EntityFileBP)
-    def get_entity(self, identifier: str): pass
-
-    @ResourceDefinition(LootTableFile)
-    def loot_tables(self): pass
-    @Getter(LootTableFile)
-    def get_loot_table(self, identifier: str): pass
-
-    @ResourceDefinition(ItemFileBP)
-    def items(self): pass
-    @Getter(ItemFileBP)
-    def get_item(self, identifier: str): pass
-
-    @ResourceDefinition(BlockFileBP)
-    def blocks(self): pass
-    @Getter(BlockFileBP)
-    def get_block(self, identifier: str): pass
-
 
 class Event(JsonSubResource):
     def __init__(self, data: dict = None, parent: Resource = None, json_path: str = None ) -> None:
@@ -1623,19 +1589,23 @@ class Command(Resource):
 class ParticleFileComponent(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "particle_effect/components",
-        attribute = "components",
+        attribute = "component",
         getter_attribute = "id"
     )
 
 class ParticleFileEvent(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "particle_effect/events",
-        attribute = "components",
+        attribute = "event",
         getter_attribute = "id"
     )
 
 @format_version()
 @identifier("particle_effect/description/identifier")
+@ImplementsSubResource(
+    ParticleFileComponent,
+    ParticleFileEvent
+)
 class ParticleFile(JsonFileResource):
     """
     ParticleFile is a JsonFileResource which represents a particle file.
@@ -1644,71 +1614,53 @@ class ParticleFile(JsonFileResource):
     identifier: str
     type_info = TypeInfo(
         filepath = "particles",
-        attribute = "particles",
-        getter_attribute = "identifier"
+        attribute = "particle",
+        getter_attribute = "identifier",
     )
-
-    @SubResourceDefinition(ParticleFileComponent)
-    def components(self): pass
-    @Getter(ParticleFileComponent)
-    def get_component(self, id: str): pass
-    @SubResourceAdder(ParticleFileComponent)
-    def add_component(self, name: str, data: dict): pass
-
-    @SubResourceDefinition(ParticleFileEvent)
-    def events(self): pass
-    @Getter(ParticleFileEvent)
-    def get_event(self, id: str): pass
-    @SubResourceAdder(ParticleFileEvent)
-    def add_event(self, name: str, data: dict): pass
 
 class AnimationControllerStateRP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "states",
-        attribute = "states",
+        attribute = "state",
         getter_attribute = "id"
     )
 
 @ClassProperty('initial_state')
+@ImplementsSubResource(
+    AnimationControllerStateRP
+)
 class AnimationControllerRP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "animation_controllers",
-        attribute = "animation_controllers",
+        attribute = "animation_controller",
         getter_attribute = "id"
     )
 
-    @SubResourceDefinition(AnimationControllerStateRP)
-    def states(self): pass
-    @Getter(AnimationControllerStateRP)
-    def get_state(self, id: str): pass
-    @SubResourceAdder(AnimationControllerStateRP)
-    def add_state(self, name: str, data: dict): pass
-
+@ImplementsSubResource(
+    AnimationControllerRP
+)
 class AnimationControllerFileRP(JsonFileResource):
     """
     AnimationControllerFileRP
     """
     type_info = TypeInfo(
         filepath = "animation_controllers",
-        attribute = "animation_controller_files",
-        getter_attribute = "filepath"
+        attribute = "animation_controller_file",
+        getter_attribute = "filepath",
+        child_cls=AnimationControllerRP
     )
-
-    @SubResourceDefinition(AnimationControllerRP)
-    def animation_controllers(self): pass
-    @Getter(AnimationControllerRP)
-    def get_animation_controller(self, id: str): pass
-    @SubResourceAdder(AnimationControllerRP)
-    def add_animation_controller(self, name: str, data: dict): pass
 
 @ClassProperty('loop')
 class AnimationRP(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "animations",
-        attribute = "animations",
+        attribute = "animation",
         getter_attribute = "id"
     )
 
+@ImplementsSubResource(
+    AnimationRP
+)
 class AnimationFileRP(JsonFileResource):
     """
     AnimationFileRP is a class which represents a resource pack's animation file.
@@ -1718,16 +1670,11 @@ class AnimationFileRP(JsonFileResource):
 
     type_info = TypeInfo(
         filepath = "animations",
-        attribute = "animation_files",
-        getter_attribute = "filepath"
+        attribute = "animation_file",
+        getter_attribute = "filepath",
+        child_cls=AnimationRP
     )
 
-    @SubResourceDefinition(AnimationRP)
-    def animations(self): pass
-    @SubResourceAdder(AnimationRP)
-    def add_animation(self, name: str, data: dict): pass
-    @Getter(AnimationRP)
-    def get_animation(self, id: str): pass
 
 @format_version()
 @identifier("minecraft:attachable/description/identifier")
@@ -1736,7 +1683,7 @@ class AttachableFileRP(JsonFileResource):
     identifier: str
     type_info = TypeInfo(
         filepath = "attachables",
-        attribute = "attachables",
+        attribute = "attachable",
         getter_attribute = "identifier"
     )
 
@@ -1748,7 +1695,8 @@ class BiomesClientFile(JsonFileResource):
 
     type_info = TypeInfo(
         filepath = "biomes_client",
-        attribute = "biomes_client_file"
+        attribute = "biomes_client_file",
+        plural = "biomes_client_file"
     )
 
 
@@ -1766,28 +1714,23 @@ class BlocksFile(JsonFileResource):
 
 @format_version()
 @identifier("minecraft:client_entity/description/identifier")
+@ImplementsSubResource(
+    EntityEventBP
+)
 class EntityFileRP(JsonFileResource):
     """
     EntityFileRP is a class which represents a resource pack's entity file.
     """
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "entity",
-        attribute = "entities",
+        attribute = "entity",
+        plural = "entities",
         getter_attribute = "identifier"
     )
 
     @property
     def counterpart(self) -> EntityFileBP:
         return self.pack.project.behavior_pack.get_entity(self.identifier)
-
-    @SubResourceDefinition(EntityEventBP)
-    def events(self): pass
-    @Getter(EntityEventBP)
-    def get_event(self, id: str): pass
-    @SubResourceAdder(EntityEventBP)
-    def add_event(self, name: str, data: dict): pass
 
     # TODO: See if the decoration system can apply to these 'triples'.
     # Or we need to add 'adders' for all three (anim, texture, model)
@@ -1870,55 +1813,40 @@ class FlipbookTexturesFile(JsonFileResource):
 class FogDistanceComponent(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:fog_settings/distance",
-        attribute = "distance_components",
+        attribute = "distance_component",
         getter_attribute = "id"
     )
 
 class FogVolumetricDensityComponent(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:fog_settings/volumetric/density",
-        attribute = "volumetric_density_components",
+        attribute = "volumetric_density_component",
         getter_attribute = "id"
     )
 
 class FogVolumetricMediaCoefficient(JsonSubResource):
     type_info = TypeInfo(
         jsonpath = "minecraft:fog_settings/volumetric/media_coefficients",
-        attribute = "volumetric_media_coefficients",
+        attribute = "volumetric_media_coefficient",
         getter_attribute = "id"
     )
 
 @format_version()
 @identifier("minecraft:fog_settings/description/identifier")
+@ImplementsSubResource(
+    FogDistanceComponent,
+    FogVolumetricDensityComponent,
+    FogVolumetricMediaCoefficient,
+    
+)
 class FogFile(JsonFileResource):
     format_version : FormatVersion
     identifier: str
     type_info = TypeInfo(
         filepath = "fogs",
-        attribute = "fogs",
+        attribute = "fog",
         getter_attribute = "identifier"
     )
-
-    @SubResourceDefinition(FogDistanceComponent)
-    def distance_components(self): pass
-    @Getter(FogDistanceComponent)
-    def get_distance_component(self, id: str): pass
-    @SubResourceAdder(FogDistanceComponent)
-    def add_distance_component(self, name: str, data: dict): pass
-
-    @SubResourceDefinition(FogVolumetricDensityComponent)
-    def volumetric_density_components(self): pass
-    @Getter(FogVolumetricDensityComponent)
-    def get_volumetric_density_component(self, id: str): pass
-    @SubResourceAdder(FogVolumetricDensityComponent)
-    def add_volumetric_density_component(self, name: str, data: dict): pass
-
-    @SubResourceDefinition(FogVolumetricMediaCoefficient)
-    def volumetric_media_coefficients(self): pass
-    @Getter(FogVolumetricMediaCoefficient)
-    def get_volumetric_media_coefficient(self, id: str): pass
-    @SubResourceAdder(FogVolumetricMediaCoefficient)
-    def add_volumetric_media_coefficient(self, name: str, data: dict): pass
 
 class ItemComponentRP(JsonSubResource):
     type_info = TypeInfo(
@@ -1929,6 +1857,9 @@ class ItemComponentRP(JsonSubResource):
 
 @format_version()
 @identifier("minecraft:item/description/identifier")
+@ImplementsSubResource(
+    ItemComponentRP
+)
 class ItemFileRP(JsonFileResource):
     format_version : FormatVersion
     identifier: str
@@ -1938,13 +1869,6 @@ class ItemFileRP(JsonFileResource):
         getter_attribute = "filepath"
     )
 
-    @SubResourceDefinition(ItemComponentRP)
-    def components(self): pass
-    @Getter(ItemComponentRP)
-    def get_component(self, id: str): pass
-    @SubResourceAdder(ItemComponentRP)
-    def add_component(self, name: str, data: dict): pass
-
 class Material(JsonSubResource):
     """
     Represents a single material, from a .material file
@@ -1952,11 +1876,14 @@ class Material(JsonSubResource):
 
     type_info = TypeInfo(
         jsonpath = "**",
-        attribute = "materials",
+        attribute = "material",
         getter_attribute = "id"
     )
 
 @format_version(jsonpath="materials/version")
+@ImplementsSubResource(
+    Material
+)
 class MaterialFile(JsonFileResource):
     """
     MaterialFile is a class which represents a resource pack's material file.
@@ -1966,17 +1893,11 @@ class MaterialFile(JsonFileResource):
     format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "materials",
-        attribute = "material_files",
+        attribute = "material_file",
         getter_attribute = "filepath",
-        extension="material"
+        extension="material",
+        child_cls=Material
     )
-
-    @SubResourceDefinition(Material)
-    def materials(self): pass
-    @Getter(Material)
-    def get_material(self, id: str): pass
-    @SubResourceAdder(Material)
-    def add_material(self, name: str, data: dict): pass
 
 class Cube(JsonSubResource):
     type_info = TypeInfo(
@@ -1986,53 +1907,42 @@ class Cube(JsonSubResource):
     )
 
 @ClassProperty("name")
+@ImplementsSubResource(
+    Cube
+)
 class Bone(JsonSubResource):
     name: str
     type_info = TypeInfo(
         jsonpath = "bones",
-        attribute = "bones",
+        attribute = "bone",
         getter_attribute = "name"
     )
 
-    @SubResourceDefinition(Cube)
-    def cubes(self): pass
-    @Getter(Cube)
-    def get_cube(self, id: str): pass
-    @SubResourceAdder(Cube)
-    def add_cube(self, name: str, data: dict): pass
-
 
 @identifier("description/identifier")
+@ImplementsSubResource(
+    Bone
+)
 class Model(JsonSubResource):
     identifier: str
     type_info = TypeInfo(
         jsonpath = "minecraft:geometry",
-        attribute = "models",
+        attribute = "model",
         getter_attribute = "identifier"
     )
 
-    @SubResourceDefinition(Bone)
-    def bones(self): pass
-    @Getter(Bone)
-    def get_bone(self, id: str): pass
-    @SubResourceAdder(Bone)
-    def add_bone(self, name: str, data: dict): pass
-
 @format_version()
+@ImplementsSubResource(
+    Model
+)
 class ModelFile(JsonFileResource):
     format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "models",
-        attribute = "model_files",
-        getter_attribute = "filepath"
+        attribute = "model_file",
+        getter_attribute = "filepath",
+        child_cls=Model
     )
-
-    @SubResourceDefinition(Model)
-    def models(self): pass
-    @Getter(Model)
-    def get_model(self, id: str): pass
-    @SubResourceAdder(Model)
-    def add_model(self, name: str, data: dict): pass
 
 class RenderController(JsonSubResource):
     """
@@ -2042,25 +1952,22 @@ class RenderController(JsonSubResource):
 
     type_info = TypeInfo(
         jsonpath = "render_controllers",
-        attribute = "render_controllers",
+        attribute = "render_controller",
         getter_attribute = "id"
     )
 
 @format_version()
+@ImplementsSubResource(
+    RenderController
+)
 class RenderControllerFile(JsonFileResource):
     format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "render_controllers",
-        attribute = "render_controller_files",
-        getter_attribute = "filepath"
+        attribute = "render_controller_file",
+        getter_attribute = "filepath",
+        child_cls=RenderController
     )
-
-    @SubResourceDefinition(RenderController)
-    def render_controllers(self): pass
-    @SubResourceAdder(RenderController)
-    def add_render_controller(self, name: str, data: dict): pass
-    @Getter(RenderController)
-    def get_render_controller(self, id: str): pass
 
 
 @format_version()
@@ -2255,81 +2162,23 @@ class TextureFileDouble(JsonSubResource):
             "textures": self.textures
         }
 
+@ImplementsResource(
+    ParticleFile,
+    AttachableFileRP,
+    EntityFileRP,
+    FogFile,
+    ItemFileRP,
+    AnimationControllerFileRP,
+    AnimationFileRP,
+    MaterialFile,
+    ModelFile,
+    RenderControllerFile
+)
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
         super().__init__(input_path, project=project)
         self._sounds: list[str] = []
         self._textures: list[str] = []
-
-    @ResourceDefinition(ParticleFile)
-    def particles(self): pass
-    @Getter(ParticleFile)
-    def get_particle(self, identifier: str): pass
-
-    @ResourceDefinition(AttachableFileRP)
-    def attachables(self): pass
-    @Getter(AttachableFileRP)
-    def get_attachable(self, identifier:str): pass
-
-    @ResourceDefinition(AnimationControllerFileRP)
-    def animation_controller_files(self): pass
-    @Getter(AnimationControllerFileRP)
-    def get_animation_controller_file(self, filepath:str): pass
-    @JsonChildResource(AnimationControllerFileRP, AnimationControllerRP)
-    def animation_controllers(self): pass
-    @ChildGetter(AnimationControllerFileRP, AnimationControllerRP)
-    def get_animation_controller(self, id: str): pass
-
-    @ResourceDefinition(AnimationFileRP)
-    def animation_files(self): pass
-    @Getter(AnimationFileRP)
-    def get_animation_file(self, filepath:str): pass
-    @JsonChildResource(AnimationFileRP, AnimationRP)
-    def animations(self): pass
-    @ChildGetter(AnimationFileRP, AnimationRP)
-    def get_animation(self, id: str): pass
-
-    @ResourceDefinition(MaterialFile)
-    def material_files(self): pass
-    @Getter(MaterialFile)
-    def get_material_file(self, filepath:str): pass
-    @JsonChildResource(MaterialFile, Material)
-    def materials(self): pass
-    @ChildGetter(MaterialFile, Material)
-    def get_material(self, id: str): pass
-
-    @ResourceDefinition(EntityFileRP)
-    def entities(self): pass
-    @Getter(EntityFileRP)
-    def get_entity(self, identifier:str): pass
-
-    @ResourceDefinition(FogFile)
-    def fogs(self): pass
-    @Getter(FogFile)
-    def get_fog(self, identifier:str): pass
-
-    @ResourceDefinition(ModelFile)
-    def model_files(self): pass
-    @Getter(ModelFile)
-    def get_model_file(self, filepath:str): pass
-    @JsonChildResource(ModelFile, Model)
-    def models(self): pass
-    @ChildGetter(ModelFile, Model)
-    def get_model(self, id: str): pass
-
-    @ResourceDefinition(RenderControllerFile)
-    def render_controller_files(self): pass
-    @Getter(RenderControllerFile)
-    def get_render_controller_file(self, filepath:str): pass
-    @JsonChildResource(RenderControllerFile, RenderController)
-    def render_controllers(self): pass
-    @ChildGetter(RenderControllerFile, RenderController)
-    def get_render_controller(self, id: str): pass
-
-    @ResourceDefinition(ItemFileRP)
-    def items(self): pass
-    @Getter(ItemFileRP)
-    def get_item(self, identifier:str): pass
 
     @cached_property
     def sounds(self) -> list[str]:

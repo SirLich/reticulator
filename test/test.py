@@ -147,6 +147,7 @@ class TestDeletion(unittest.TestCase):
     def test_subresource_deletion(self):
         # Delete entity
         entity = self.bp.get_entity('minecraft:dolphin')
+
         component = entity.get_component('minecraft:type_family')
         component.delete()
 
