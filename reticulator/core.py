@@ -103,7 +103,7 @@ def ImplementsSubResource(*args : JsonSubResource):
     Class Decorator which interjects functions to deal with subresources.
     """
 
-    def inner(parent_cls):
+    def inner(parent_cls: T):
         for sub_cls in args:
             cls_type_info : TypeInfo = sub_cls.type_info
 
@@ -111,16 +111,16 @@ def ImplementsSubResource(*args : JsonSubResource):
             plural = cls_type_info.plural
 
             @SubResourceDefinition(sub_cls)
-            def components(parent_cls): pass
+            def components(parent_cls) -> list[T]: pass
             setattr(parent_cls, plural, components)
             components.__set_name__(parent_cls, plural)
 
             @Getter(sub_cls)
-            def get_x(parent_cls, id: str): pass
+            def get_x(parent_cls, id: str) -> T: pass
             setattr(parent_cls, f"get_{attribute}", get_x)
 
             @SubResourceAdder(sub_cls)
-            def add_x(parent_cls, name: str, data: dict): pass
+            def add_x(parent_cls, name: str, data: dict) -> None: pass
             setattr(parent_cls, f"add_{attribute}", add_x)
 
         return parent_cls

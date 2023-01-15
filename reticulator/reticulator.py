@@ -462,8 +462,6 @@ class ComponentGroup(JsonSubResource):
     ComponentGroup
 )
 class EntityFileBP(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "entities",
         attribute = "entity",
@@ -1011,7 +1009,6 @@ class RenderController(JsonSubResource):
     RenderController
 )
 class RenderControllerFile(JsonFileResource):
-    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "render_controllers",
         attribute = "render_controller_file",
@@ -1026,7 +1023,6 @@ class SoundDefinitionsFile(JsonFileResource):
     SoundsDefinitionFile is a class which represents the data stored in
     'rp/sounds/sound_definitions.json'
     """
-    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "sounds/sound_definitions",
         attribute = "sound_definitions_file"

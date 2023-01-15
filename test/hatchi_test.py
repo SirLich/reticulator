@@ -1,31 +1,19 @@
 import sys
 import shutil
 
+from typing import *
+from pprint import pprint
+
 sys.path.insert(0, '../reticulator')
 from reticulator import *
 
-def setup_output_dir():
-    try:
-        shutil.rmtree('./out/')
-    except:
-        pass
-
-    os.mkdir('./out/')
+import reticulator as ret
 
 def main():
-    # Load project
-    setup_output_dir()
-
     bp = BehaviorPack('./content/bp/')
-    bp.output_directory = './out/bp/' 
+    # pprint(get_type_hints(getattr(getattr(ret, "EntityFileBP"), "get_component")))
 
     for entity in bp.entities:
-        print(entity.components)
-        for event in entity.events:
-            command = f"/Say {entity.identifier}: {event.id}"
-            event.append_jsonpath('run_command/command', command)
-
-    bp.save()
-
+        print(entity.identifier)
 
 main()
