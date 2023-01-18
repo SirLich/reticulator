@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 """
-Module which handles core Reticulator functions. This class is generic, 
+Module which handles core Reticulator functions. This class is generic,
 and could theoretically be split into it's own class.
 """
 

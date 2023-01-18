@@ -14,6 +14,5 @@ def main():
     # pprint(get_type_hints(getattr(getattr(ret, "EntityFileBP"), "get_component")))
 
     for entity in bp.entities:
-        print(entity.identifier)
-
+        entity.delete_jsonpath('**/minecraft:behavior.melee_attack')
 main()

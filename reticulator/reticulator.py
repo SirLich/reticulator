@@ -138,8 +138,8 @@ class Project():
         In other words, pass in a folder where you want both the RP and the BP 
         to be saved.
 
-        If you need finer control, use the 'set_save_location' method on the 
-        ResourcePack and BehaviorPack instead.
+        If you need finer control, set the `output_directory` on both the RP
+        and the BP individually.
         """
         self.resource_pack.output_directory = save_location + "/" + os.path.dirname(self.resource_pack.input_path)
         self.behavior_pack.output_directory = save_location + "/" + os.path.dirname(self.behavior_pack.input_path)
