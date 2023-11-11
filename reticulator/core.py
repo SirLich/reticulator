@@ -77,9 +77,9 @@ def ImplementSubResource(*args : JsonSubResource):
             plural = cls_type_info.plural
 
             @SubResourceDefinition(sub_cls)
-            def components(parent_cls) -> list[T]: pass
-            setattr(parent_cls, plural, components)
-            components.__set_name__(parent_cls, plural)
+            def x(parent_cls) -> list[T]: pass
+            setattr(parent_cls, plural, x)
+            x.__set_name__(parent_cls, plural)
 
             @DResourceGetter(sub_cls)
             def get_x(parent_cls, id: str) -> T: pass

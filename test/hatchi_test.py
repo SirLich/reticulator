@@ -11,8 +11,8 @@ import reticulator as ret
 
 def main():
     bp = BehaviorPack('./content/bp/')
-    # pprint(get_type_hints(getattr(getattr(ret, "EntityFileBP"), "get_component")))
 
     for entity in bp.entities:
-        entity.delete_jsonpath('**/minecraft:behavior.melee_attack')
+        entity.
+
 main()

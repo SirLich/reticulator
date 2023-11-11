@@ -658,8 +658,6 @@ class ParticleFile(JsonFileResource):
     """
     ParticleFile is a JsonFileResource which represents a particle file.
     """
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "particles",
         attribute = "particle",
@@ -727,8 +725,6 @@ class AnimationFileRP(JsonFileResource):
 @ImplementFormatVersion()
 @ImplementIdentifier("minecraft:attachable/description/identifier")
 class AttachableFileRP(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "attachables",
         attribute = "attachable",
@@ -884,12 +880,9 @@ class FogVolumetricMediaCoefficient(JsonSubResource):
 @ImplementSubResource(
     FogDistanceComponent,
     FogVolumetricDensityComponent,
-    FogVolumetricMediaCoefficient,
-    
+    FogVolumetricMediaCoefficient
 )
 class FogFile(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "fogs",
         attribute = "fog",
@@ -909,8 +902,6 @@ class ItemComponentRP(JsonSubResource):
     ItemComponentRP
 )
 class ItemFileRP(JsonFileResource):
-    format_version : FormatVersion
-    identifier: str
     type_info = TypeInfo(
         filepath = "items",
         attribute = "items",
@@ -938,7 +929,6 @@ class MaterialFile(JsonFileResource):
     Since many materials can be defined in the same file, it is often more useful
     to use the MaterialRP class directly.
     """
-    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "materials",
         attribute = "material_file",
@@ -984,7 +974,6 @@ class Model(JsonSubResource):
     Model
 )
 class ModelFile(JsonFileResource):
-    format_version : FormatVersion
     type_info = TypeInfo(
         filepath = "models",
         attribute = "model_file",
