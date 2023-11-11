@@ -180,7 +180,7 @@ def JsonChildResource(parent_cls: Resource, child_cls: T):
         return wrapper
     return decorator
 
-
+        
 def ResourceDefinition(cls : T):
     """Inserts implementation for JsonFileResource"""
 
@@ -195,10 +195,13 @@ def ResourceDefinition(cls : T):
             setattr(self, attribute, [])
             base_directory = os.path.join(self.input_path, filepath)
 
-            for local_path in glob.glob(base_directory + "/**/*" + extension, recursive=True):
-                local_path = os.path.relpath(local_path, self.input_path)
+            # OPTIMIZE THIS
+            for global_path in glob.glob(base_directory + "/**/*" + extension, recursive=True):
+                local_path = os.path.relpath(global_path, self.input_path)
 
-                getattr(self, attribute).append(cls(filepath = local_path, pack = self))
+                data = cls.async_loader(global_path)
+                getattr(self, attribute).append(cls(filepath = local_path, pack = self, data = data))
+            
             return getattr(self, attribute)
         return wrapper
     return decorator
@@ -631,6 +634,11 @@ class FileResource(Resource):
         """
         self._deleted = True
 
+    @staticmethod
+    def async_loader(file_path):
+        raise NotImplementedError("FileResource doesn't provide a default async loader.")
+        
+
 class JsonResource(Resource):
     """
     Parent class, which is responsible for all resources which contain
@@ -908,6 +916,36 @@ class JsonFileResource(FileResource, JsonResource):
     def __repr__(self):
         return f"'{self.__class__.__name__}: {self.filepath}'"
 
+
+    @staticmethod
+    def async_loader(filepath):
+        """
+        Loads json from file. `local_path` paramater is GLOBAL.
+        """
+
+        if not os.path.exists(filepath):
+            raise AssetNotFoundError(f"File not found: {filepath}")
+        try:
+            with open(filepath, "r", encoding='utf8') as fh:
+                try:
+                    return json.load(fh)
+                except json.JSONDecodeError:
+                    try:
+                        fh.seek(0)
+                        contents = ""
+                        for line in fh.readlines():
+                            cleaned_line = line.split("//", 1)[0]
+                            if len(cleaned_line) > 0 and line.endswith("\n") and "\n" not in cleaned_line:
+                                cleaned_line += "\n"
+                            contents += cleaned_line
+                        while "/*" in contents:
+                            pre_comment, post_comment = contents.split("/*", 1)
+                            contents = pre_comment + post_comment.split("*/", 1)[1]
+                        return json.loads(contents)
+                    except json.JSONDecodeError as exception:
+                        return {}
+        except Exception:
+            raise InvalidJsonError(filepath)
 
     def load_json(self, filepath: str) -> dict:
         """
