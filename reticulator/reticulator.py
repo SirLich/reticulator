@@ -9,7 +9,7 @@ from typing import Tuple
 
 from core import *
 
-def format_version(jsonpath: str = "format_version"):
+def ImplementFormatVersion(jsonpath: str = "format_version"):
     """
     Class Decorator which inserts a 'format_version' property, with proper
     semantics.
@@ -30,7 +30,7 @@ def format_version(jsonpath: str = "format_version"):
     return inner_format_version
 
 
-def identifier(jsonpath: str):
+def ImplementIdentifier(jsonpath: str):
     """
     Class Decorator, which injects handling for accessing 'identifier'.
     :param jsonpath: The jsonpath where the identifier can be located.
@@ -323,8 +323,8 @@ class AnimationControllerBP(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version()
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementSubResource(
     AnimationControllerBP
 )
 class AnimationControllerFileBP(JsonFileResource):
@@ -384,8 +384,8 @@ class FunctionFile(FileResource):
             for command in self.commands:
                 file.write(command.data + '\n')
 
-@identifier("minecraft:feature_rules/description/identifier")
-@format_version()
+@ImplementIdentifier("minecraft:feature_rules/description/identifier")
+@ImplementFormatVersion()
 class FeatureRuleFile(JsonFileResource):
     type_info = TypeInfo(
         filepath = "feature_rules",
@@ -393,8 +393,8 @@ class FeatureRuleFile(JsonFileResource):
         getter_attribute="identifier"
     )
 
-@identifier("**/description/identifier")
-@format_version()
+@ImplementIdentifier("**/description/identifier")
+@ImplementFormatVersion()
 class FeatureFile(JsonFileResource):
     type_info = TypeInfo(
         filepath = "features",
@@ -402,8 +402,8 @@ class FeatureFile(JsonFileResource):
         getter_attribute="identifier"
     )
     
-@format_version()
-@identifier("minecraft:spawn_rules/description/identifier")
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:spawn_rules/description/identifier")
 class SpawnRuleFile(JsonFileResource):
     type_info = TypeInfo(
         filepath = "spawn_rules",
@@ -411,8 +411,8 @@ class SpawnRuleFile(JsonFileResource):
         getter_attribute="identifier"
     )
 
-@identifier("**/identifier")
-@format_version()
+@ImplementIdentifier("**/identifier")
+@ImplementFormatVersion()
 class RecipeFile(JsonFileResource):
     type_info = TypeInfo(
         filepath = "recipes",
@@ -441,7 +441,7 @@ class Component(JsonSubResource):
         getter_attribute = "id"
     )
 
-@ImplementsSubResource(
+@ImplementSubResource(
     Component
 )
 class ComponentGroup(JsonSubResource):
@@ -454,9 +454,9 @@ class ComponentGroup(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version()
-@identifier("minecraft:entity/description/identifier")
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:entity/description/identifier")
+@ImplementSubResource(
     EntityEventBP, 
     EntityComponentBP, 
     ComponentGroup
@@ -479,7 +479,7 @@ class LootTablePool(JsonSubResource):
         attribute = "pool"
     )
 
-@ImplementsSubResource(
+@ImplementSubResource(
     LootTablePool
 )
 class LootTableFile(JsonFileResource):
@@ -504,9 +504,9 @@ class ItemEventBP(JsonSubResource):
     )
 
 
-@format_version()
-@identifier("minecraft:item/description/identifier")
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:item/description/identifier")
+@ImplementSubResource(
     ItemComponentBP, 
     ItemEventBP
 )
@@ -525,9 +525,9 @@ class BlockFileComponentBP(JsonSubResource):
     )
 
 
-@format_version()
-@identifier(jsonpath="minecraft:block/description/identifier")
-@ImplementsSubResource(BlockFileComponentBP)
+@ImplementFormatVersion()
+@ImplementIdentifier(jsonpath="minecraft:block/description/identifier")
+@ImplementSubResource(BlockFileComponentBP)
 class BlockFileBP(JsonFileResource):
     type_info = TypeInfo(
         filepath = "blocks",
@@ -543,7 +543,7 @@ class AnimationBP(JsonSubResource):
         getter_attribute = "id"
     )
 
-@ImplementsSubResource(AnimationBP)
+@ImplementSubResource(AnimationBP)
 class AnimationFileBP(JsonFileResource):
     type_info = TypeInfo(
         filepath = "animations",
@@ -552,7 +552,7 @@ class AnimationFileBP(JsonFileResource):
         child_cls=AnimationBP
     )
 
-@ImplementsResource(
+@ImplementResource(
     FunctionFile,
     FeatureRuleFile,
     FeatureFile,
@@ -648,9 +648,9 @@ class ParticleFileEvent(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version()
-@identifier("particle_effect/description/identifier")
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementIdentifier("particle_effect/description/identifier")
+@ImplementSubResource(
     ParticleFileComponent,
     ParticleFileEvent
 )
@@ -674,7 +674,7 @@ class AnimationControllerStateRP(JsonSubResource):
     )
 
 @ClassProperty('initial_state')
-@ImplementsSubResource(
+@ImplementSubResource(
     AnimationControllerStateRP
 )
 class AnimationControllerRP(JsonSubResource):
@@ -684,7 +684,7 @@ class AnimationControllerRP(JsonSubResource):
         getter_attribute = "id"
     )
 
-@ImplementsSubResource(
+@ImplementSubResource(
     AnimationControllerRP
 )
 class AnimationControllerFileRP(JsonFileResource):
@@ -706,7 +706,7 @@ class AnimationRP(JsonSubResource):
         getter_attribute = "id"
     )
 
-@ImplementsSubResource(
+@ImplementSubResource(
     AnimationRP
 )
 class AnimationFileRP(JsonFileResource):
@@ -724,8 +724,8 @@ class AnimationFileRP(JsonFileResource):
     )
 
 
-@format_version()
-@identifier("minecraft:attachable/description/identifier")
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:attachable/description/identifier")
 class AttachableFileRP(JsonFileResource):
     format_version : FormatVersion
     identifier: str
@@ -760,9 +760,9 @@ class BlocksFile(JsonFileResource):
 
 
 
-@format_version()
-@identifier("minecraft:client_entity/description/identifier")
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:client_entity/description/identifier")
+@ImplementSubResource(
     EntityEventBP
 )
 class EntityFileRP(JsonFileResource):
@@ -879,9 +879,9 @@ class FogVolumetricMediaCoefficient(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version()
-@identifier("minecraft:fog_settings/description/identifier")
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:fog_settings/description/identifier")
+@ImplementSubResource(
     FogDistanceComponent,
     FogVolumetricDensityComponent,
     FogVolumetricMediaCoefficient,
@@ -903,9 +903,9 @@ class ItemComponentRP(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version()
-@identifier("minecraft:item/description/identifier")
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementIdentifier("minecraft:item/description/identifier")
+@ImplementSubResource(
     ItemComponentRP
 )
 class ItemFileRP(JsonFileResource):
@@ -928,8 +928,8 @@ class Material(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version(jsonpath="materials/version")
-@ImplementsSubResource(
+@ImplementFormatVersion(jsonpath="materials/version")
+@ImplementSubResource(
     Material
 )
 class MaterialFile(JsonFileResource):
@@ -955,7 +955,7 @@ class Cube(JsonSubResource):
     )
 
 @ClassProperty("name")
-@ImplementsSubResource(
+@ImplementSubResource(
     Cube
 )
 class Bone(JsonSubResource):
@@ -967,8 +967,8 @@ class Bone(JsonSubResource):
     )
 
 
-@identifier("description/identifier")
-@ImplementsSubResource(
+@ImplementIdentifier("description/identifier")
+@ImplementSubResource(
     Bone
 )
 class Model(JsonSubResource):
@@ -979,8 +979,8 @@ class Model(JsonSubResource):
         getter_attribute = "identifier"
     )
 
-@format_version()
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementSubResource(
     Model
 )
 class ModelFile(JsonFileResource):
@@ -1004,8 +1004,8 @@ class RenderController(JsonSubResource):
         getter_attribute = "id"
     )
 
-@format_version()
-@ImplementsSubResource(
+@ImplementFormatVersion()
+@ImplementSubResource(
     RenderController
 )
 class RenderControllerFile(JsonFileResource):
@@ -1017,7 +1017,7 @@ class RenderControllerFile(JsonFileResource):
     )
 
 
-@format_version()
+@ImplementFormatVersion()
 class SoundDefinitionsFile(JsonFileResource):
     """
     SoundsDefinitionFile is a class which represents the data stored in
@@ -1208,7 +1208,7 @@ class TextureFileDouble(JsonSubResource):
             "textures": self.textures
         }
 
-@ImplementsResource(
+@ImplementResource(
     ParticleFile,
     AttachableFileRP,
     EntityFileRP,
@@ -1219,6 +1219,15 @@ class TextureFileDouble(JsonSubResource):
     MaterialFile,
     ModelFile,
     RenderControllerFile
+)
+@ImplementSingleResource(
+    SoundsFile,
+    SoundDefinitionsFile,
+    FlipbookTexturesFile,
+    BlocksFile,
+    BiomesClientFile,
+    TerrainTextureFile,
+    ItemTextureFile
 )
 class ResourcePack(Pack):
     def __init__(self, input_path: str, project: Project = None):
@@ -1289,26 +1298,3 @@ class ResourcePack(Pack):
         if trim_extension:
             textures = [os.path.splitext(path)[0] for path in textures]
         return textures
-
-    # === Individual Files ===
-
-    @SingleResourceDefinition(SoundsFile)
-    def sounds_file(self): pass
-
-    @SingleResourceDefinition(SoundDefinitionsFile)
-    def sound_definitions_file(self): pass
-
-    @SingleResourceDefinition(FlipbookTexturesFile)
-    def flipbook_textures_file(self): pass
-
-    @SingleResourceDefinition(BlocksFile)
-    def blocks_file(self): pass
-
-    @SingleResourceDefinition(BiomesClientFile)
-    def biomes_client_file(self): pass
-
-    @SingleResourceDefinition(TerrainTextureFile)
-    def terrain_texture_file(self): pass
-
-    @SingleResourceDefinition(ItemTextureFile)
-    def item_texture_file(self): pass

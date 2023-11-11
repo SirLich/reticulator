@@ -3,7 +3,7 @@ from __future__ import annotations
 
 """
 Module which handles core Reticulator functions. This class is generic,
-and could theoretically be split into it's own class.
+and could theoretically be split into it's own library.
 """
 
 import os
@@ -62,45 +62,11 @@ def convert_to_notify_structure(data: Union[dict, list], parent: Resource) -> Un
     return data
 
 
-def ImplementsResource(*args : JsonFileResource):
-    def inner(parent_cls):
-        for sub_cls in args:
-            cls_type_info : TypeInfo = sub_cls.type_info
-
-            attribute = cls_type_info.attribute
-            plural = cls_type_info.plural
-
-            @ResourceDefinition(sub_cls)
-            def x(parent_cls): pass
-            setattr(parent_cls, plural, x)
-            x.__set_name__(parent_cls, plural) # See: CachedProperty docs.
-
-            @Getter(sub_cls)
-            def get_x(parent_cls, id: str): pass
-            setattr(parent_cls, f"get_{attribute}", get_x)
-
-            @ResourceAdder(sub_cls)
-            def add_x(parent_cls, filepath: str, data: dict): pass
-            setattr(parent_cls, f"add_{attribute}", add_x)
-
-            child_cls = cls_type_info.child_cls
-            if child_cls != None:
-                @JsonChildResource(sub_cls, child_cls)
-                def child_x(self): pass
-                setattr(parent_cls, child_cls.type_info.plural, child_x)
-
-                @ChildGetter(sub_cls, child_cls)
-                def get_child_x(self, id: str): pass
-                setattr(parent_cls, f"get_{child_cls.type_info.attribute}", get_child_x)
-
-        return parent_cls
-
-    return inner
 
 
-def ImplementsSubResource(*args : JsonSubResource):
+def ImplementSubResource(*args : JsonSubResource):
     """
-    Class Decorator which interjects functions to deal with subresources.
+    Wrapper class which injects all needed decorators to handle sub-resources.
     """
 
     def inner(parent_cls: T):
@@ -115,7 +81,7 @@ def ImplementsSubResource(*args : JsonSubResource):
             setattr(parent_cls, plural, components)
             components.__set_name__(parent_cls, plural)
 
-            @Getter(sub_cls)
+            @DResourceGetter(sub_cls)
             def get_x(parent_cls, id: str) -> T: pass
             setattr(parent_cls, f"get_{attribute}", get_x)
 
@@ -181,30 +147,27 @@ def JsonChildResource(parent_cls: Resource, child_cls: T):
     return decorator
 
 
-def ResourceDefinition(cls : T):
-    """Inserts implementation for JsonFileResource"""
+def ImplementSingleResource(*args : JsonFileResource):
+    """
+    Wrapper decorator for implementing multiple Single Resources.
+    """
 
-    attribute = cls.__name__
-    filepath = cls.type_info.filepath
-    extension = cls.type_info.extension
+    def inner(parent_cls):
+        for sub_cls in args:
+            cls_type_info : TypeInfo = sub_cls.type_info
 
-    def decorator(func) -> cached_property[list[T]]:
-        @cached_property
-        @functools.wraps(func)
-        def wrapper(self) -> list[T]:
-            setattr(self, attribute, [])
-            base_directory = os.path.join(self.input_path, filepath)
+            attribute = cls_type_info.attribute
 
-            for local_path in glob.glob(base_directory + "/**/*" + extension, recursive=True):
-                local_path = os.path.relpath(local_path, self.input_path)
+            @DSingleResourceDefinition(sub_cls)
+            def x(parent_cls): pass
+            setattr(parent_cls, attribute, x)
+            x.__set_name__(parent_cls, attribute)
 
-                getattr(self, attribute).append(cls(filepath = local_path, pack = self))
-            return getattr(self, attribute)
-        return wrapper
-    return decorator
+        return parent_cls
 
+    return inner
 
-def SingleResourceDefinition(cls : T):
+def DSingleResourceDefinition(cls : T):
     """Inserts implementation for JsonFileResource (single)"""
 
     attribute = cls.__name__
@@ -238,7 +201,77 @@ def SubResourceDefinition(cls: T):
     return decorator
 
 
-def Getter(cls : T):
+
+#region Resources
+
+
+def ImplementResource(*args : JsonFileResource):
+    """
+    Class Decorator which interjects functions to deal with resources. Wraps:
+      - DResourceDefinition
+      - DResourceGetter
+      - DResourceGetter
+    """
+        
+    def inner(parent_cls):
+        for sub_cls in args:
+            cls_type_info : TypeInfo = sub_cls.type_info
+
+            attribute = cls_type_info.attribute
+            plural = cls_type_info.plural
+
+            @DResourceDefinition(sub_cls)
+            def x(parent_cls): pass
+            setattr(parent_cls, plural, x)
+            x.__set_name__(parent_cls, plural) # See: CachedProperty docs.
+
+            @DResourceGetter(sub_cls)
+            def get_x(parent_cls, id: str): pass
+            setattr(parent_cls, f"get_{attribute}", get_x)
+
+            @DResourceAdder(sub_cls)
+            def add_x(parent_cls, filepath: str, data: dict): pass
+            setattr(parent_cls, f"add_{attribute}", add_x)
+
+            child_cls = cls_type_info.child_cls
+            if child_cls != None:
+                @JsonChildResource(sub_cls, child_cls)
+                def child_x(self): pass
+                setattr(parent_cls, child_cls.type_info.plural, child_x)
+
+                @ChildGetter(sub_cls, child_cls)
+                def get_child_x(self, id: str): pass
+                setattr(parent_cls, f"get_{child_cls.type_info.attribute}", get_child_x)
+
+        return parent_cls
+
+    return inner
+
+def DResourceDefinition(cls : T):
+    """
+    Decorator which implements support for a JsonFileResource.
+    """
+
+    attribute = cls.__name__
+    filepath = cls.type_info.filepath
+    extension = cls.type_info.extension
+
+    def decorator(func) -> cached_property[list[T]]:
+        @cached_property
+        @functools.wraps(func)
+        def wrapper(self) -> list[T]:
+            setattr(self, attribute, [])
+            base_directory = os.path.join(self.input_path, filepath)
+
+            for local_path in glob.glob(base_directory + "/**/*" + extension, recursive=True):
+                local_path = os.path.relpath(local_path, self.input_path)
+
+                getattr(self, attribute).append(cls(filepath = local_path, pack = self))
+            return getattr(self, attribute)
+        return wrapper
+    return decorator
+
+def DResourceGetter(cls : T):
     """
     Decorator which allows you to get a resource. For example getting a component
     from an entity.
@@ -255,28 +288,7 @@ def Getter(cls : T):
         return wrapper
     return decorator
 
-
-def ChildGetter(parent_cls : Any, child_cls : T):
-    """
-    Special getter for getting sub-resources that are further down the chain.
-    For example getting 'animations' directly from the RP without passing
-    through the AnimationFile class.
-    """
-    parent_attribute = parent_cls.type_info.plural
-    child_attribute = child_cls.type_info.plural
-    getter_attribute = child_cls.type_info.getter_attribute
-    def decorator(func) -> T:
-        @functools.wraps(func)
-        def wrapper(self, compare):
-            for child in getattr(self, parent_attribute):
-                for grandchild in getattr(child, child_attribute):
-                    if smart_compare(getattr(grandchild, getter_attribute), compare):
-                        return grandchild
-                return None
-        return wrapper
-    return decorator
-
-def ResourceAdder(cls : Resource):
+def DResourceAdder(cls : Resource):
     """
     This decorator allows you to inject SubResources into your Resources.
     """
@@ -295,6 +307,28 @@ def ResourceAdder(cls : Resource):
             else:
                 raise ReticulatorException()
 
+        return wrapper
+    return decorator
+
+#endregion
+
+def ChildGetter(parent_cls : Any, child_cls : T):
+    """
+    Special getter for getting sub-resources that are further down the chain.
+    For example getting 'animations' directly from the RP without passing
+    through the AnimationFile class.
+    """
+    parent_attribute = parent_cls.type_info.plural
+    child_attribute = child_cls.type_info.plural
+    getter_attribute = child_cls.type_info.getter_attribute
+    def decorator(func) -> T:
+        @functools.wraps(func)
+        def wrapper(self, compare):
+            for child in getattr(self, parent_attribute):
+                for grandchild in getattr(child, child_attribute):
+                    if smart_compare(getattr(grandchild, getter_attribute), compare):
+                        return grandchild
+                return None
         return wrapper
     return decorator
 

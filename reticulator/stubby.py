@@ -25,7 +25,6 @@ LINES = [x + "\n" for x in LINES]
 
 def getmember(cls_name):
 	for member in inspect.getmembers(ret):
-		print(member)
 		if member[0] == cls_name:
 			return member[1]
 
@@ -127,23 +126,23 @@ def main1():
 	with open('reticulator.pyi', 'w') as f:
 		f.writelines(LINES)
 
-def get_classes(lines: str):
-	classes = []
+# def get_classes(lines: str):
+# 	classes = []
 
-	current_class = []
-	for i in range(len(lines)):
-		if i 
+# 	current_class = []
+# 	for i in range(len(lines)):
+# 		if i 
 
-def main():
-	in_file  = "./reticulator.py"
-	out_file = "./reticulator.pyi"
+# def main():
+# 	in_file  = "./reticulator.py"
+# 	out_file = "./reticulator.pyi"
 	
-	with open(in_file, 'r') as f:
-		lines = f.readlines()
+# 	with open(in_file, 'r') as f:
+# 		lines = f.readlines()
 		
-	classes = get_classes(lines)
+# 	classes = get_classes(lines)
 
-	with open(out_file, 'w') as f:
-		f.write(data)
+# 	with open(out_file, 'w') as f:
+# 		f.write(data)
 	
-main()
+main1()

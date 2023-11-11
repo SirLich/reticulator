@@ -60,8 +60,8 @@ class Project():
         In other words, pass in a folder where you want both the RP and the BP 
         to be saved.
 
-        If you need finer control, use the 'set_save_location' method on the 
-        ResourcePack and BehaviorPack instead.
+        If you need finer control, set the `output_directory` on both the RP
+        and the BP individually.
         """
     def get_packs(self) -> Tuple[behavior_pack, resource_pack]:
         """
