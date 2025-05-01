@@ -669,6 +669,14 @@ class TestAttachable(unittest.TestCase):
 
     def test_add_attachable(self): pass
 
+class TestDialogue(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bp, self.rp = get_packs()
+        
+    def test_dialogues(self): pass
+
+    def test_add_dialogue(self): pass
+
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
