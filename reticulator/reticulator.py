@@ -411,6 +411,14 @@ class SpawnRuleFile(JsonFileResource):
         getter_attribute="identifier"
     )
 
+@ImplementFormatVersion()
+class DialogueFile(JsonFileResource):
+    type_info = TypeInfo(
+        filepath = "dialogue",
+        attribute = "dialogue",
+        getter_attribute = "filepath"
+    )
+
 @ImplementIdentifier("**/identifier")
 @ImplementFormatVersion()
 class RecipeFile(JsonFileResource):
@@ -563,7 +571,8 @@ class AnimationFileBP(JsonFileResource):
     ItemFileBP,
     BlockFileBP,
     AnimationControllerFileBP,
-    AnimationFileBP
+    AnimationFileBP,
+    DialogueFile
 )
 class BehaviorPack(Pack):
     """
