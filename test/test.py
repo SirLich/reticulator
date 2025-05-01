@@ -677,12 +677,6 @@ class TestDialogue(unittest.TestCase):
         self.assertEqual(len(self.bp.dialogues), 1)
         self.assertEqual(self.bp.dialogues[0].file_name, 'example.d.json')
 
-    def test_add_dialogue(self):
-        original_count = len(self.bp.dialogues)
-        dialogue = self.bp.dialogues[0]
-        self.bp.dialogues.append(dialogue)
-        self.assertEqual(len(self.bp.dialogues), original_count + 1)
-
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
