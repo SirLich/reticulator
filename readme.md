@@ -17,10 +17,10 @@ bp = project.behavior_pack
 
 # Step through the project in a comfortable manor, and adjust the 'health' component.
 for entity in bp.entities:
-	for component in entity.components:
-		if component.id == "minecraft:health":
-			print(f"Adjusted Health for {entity.identifier}.")
-			component.set_jsonpath('value', 10)
+  for component in entity.components:
+    if component.id == "minecraft:health":
+      print(f"Adjusted Health for {entity.identifier}.")
+      component.set_jsonpath('value', 10)
 
 # When you are finished, you can save your changes back to the filesystem
 project.save()
@@ -104,8 +104,8 @@ project = Project('./path/to/bp', './path/to/rp')
 rp = project.resource_pack
 
 for entity in rp.entities:
-	if entity.counterpart == None:
-		print(f"WARNING: Entity {entity.identifier} has a resource pack definition, but no behavior pack definition!")
+  if entity.counterpart == None:
+    print(f"WARNING: Entity {entity.identifier} has a resource pack definition, but no behavior pack definition!")
 ```
 
 Ensure that models aren't too complex:
@@ -114,12 +114,12 @@ Ensure that models aren't too complex:
 rp = ResourcePack('./path/to/rp')
 
 for model in entity.models:
-	cube_count = 0
-	for bone in model.bones:
-		cube_count += len(bone.cubes)
+  cube_count = 0
+  for bone in model.bones:
+    cube_count += len(bone.cubes)
 
-	if cube_count > 200:
-		print(f"Model {model.identifier} contains {cube_count} cubes, which is too many!")
+  if cube_count > 200:
+    print(f"Model {model.identifier} contains {cube_count} cubes, which is too many!")
 ```
 
 ## Raw JSON Access
@@ -143,7 +143,7 @@ And then here is a feature complete example, which shows deleting a specific com
 bp = BehaviorPack('bp')
 
 for entity in bp.entities:
-    entity.delete_jsonpath('**/minecraft:minecraft:behavior.melee_attack')
+  entity.delete_jsonpath('**/minecraft:minecraft:behavior.melee_attack')
 
 bp.save()
 ```
@@ -171,8 +171,8 @@ Printing out data:
 ```py
 rp = ResourcePack('./path/to/rp')
 for language_file in rp.language_files:
-	for translation in language_files:
-		print(f"Translation: key='{translation.key}', value='{translation.value}')
+  for translation in language_files:
+    print(f"Translation: key='{translation.key}', value='{translation.value}')
 ```
 
 Auto-translating entity names with place-holder:
@@ -182,7 +182,7 @@ rp = ResourcePack('./path/to/rp')
 en_us = rp.get_language_file('texts/en_US')
 
 for entity in rp.entities:
-	en_us.add_translation(Translation(f"item.spawn_egg.entity.{entity.identifier}.name", f"PLACEHOLDER NAME: {entity.identifier}", "# TODO"))
+  en_us.add_translation(Translation(f"item.spawn_egg.entity.{entity.identifier}.name", f"PLACEHOLDER NAME: {entity.identifier}", "# TODO"))
 
 rp.save()
 ```
@@ -190,3 +190,9 @@ rp.save()
 ## Functions
 
 We support functions, I just didn't document it yet
+
+# Version History
+
+## 1.3.0
+
+Adds minimal support for dialogue files. Also moves the project from 'beta' to 'stable' as classified on PyPi.
