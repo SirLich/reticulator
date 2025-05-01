@@ -1,0 +1,44 @@
+{
+    "format_version": "1.14.0",
+    "minecraft:npc_dialogue": {
+        "scenes": [
+            {
+                "scene_tag": "sirlich:example",
+                "npc_name": {
+                    "rawtext": [
+                        {
+                            "translate": "sirlich"
+                        }
+                    ]
+                },
+                "text": {
+                    "rawtext": [
+                        {
+                            "translate": "sirlich.example.text",
+                            "with": [
+                                "\n"
+                            ]
+                        }
+                    ]
+                },
+                "buttons": [
+                    {
+                        "name": {
+                            "rawtext": [
+                                {
+                                    "translate": "sirlich.example.button"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "on_open_commands": [
+                    "/say Hello!"
+                ],
+                "on_close_commands": [
+                    "/say Goodbye!"
+                ]
+            }
+        ]
+    }
+}
