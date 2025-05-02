@@ -196,3 +196,7 @@ We support functions, I just didn't document it yet
 ## 1.0.0
 
 Adds minimal support for dialogue files. Also moves the project from 'beta' to 'stable' as classified on PyPi. So that's 1.0 for you!
+
+## 1.0.1
+
+Adds support for plural dialogue files.
