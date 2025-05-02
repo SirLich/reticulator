@@ -673,9 +673,15 @@ class TestDialogue(unittest.TestCase):
     def setUp(self) -> None:
         self.bp, self.rp = get_packs()
 
-    def test_dialogues(self):
-        self.assertEqual(len(self.bp.dialogues), 1)
-        self.assertEqual(self.bp.dialogues[0].file_name, 'example.d.json')
+    def test_dialogues_exist(self):
+        ## Test for property existing
+        self.assertTrue(hasattr(self.bp, "dialogues"), "Dialogues property is not found.")
+        self.assertIsInstance(self.bp.dialogues, list, "Dialogues is not a list.")
+
+        ## Test if file exists
+        self.assertEqual(len(self.bp.dialogues), 1, "Expects 1 dialogue file.")
+        self.assertIsInstance(self.bp.dialogues[0], DialogueFile)
+        self.assertEqual(self.bp.dialogues[0].file_name, "example.d.json")
 
 class TestEntityFileRP(unittest.TestCase):
     def setUp(self) -> None:
