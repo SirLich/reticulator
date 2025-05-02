@@ -416,6 +416,7 @@ class DialogueFile(JsonFileResource):
     type_info = TypeInfo(
         filepath = "dialogue",
         attribute = "dialogue",
+        plural = "dialogues",
         getter_attribute = "filepath"
     )
 
