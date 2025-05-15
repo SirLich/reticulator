@@ -6,7 +6,7 @@ Reticulator has comprehensive, if messy test coverage. In general, the `content`
 
 Reticulator tests must be run from within the `tests` directory. So, to run tests:
  - `cd tests`
- - `python ./tests.py`
+ - `python ./test.py`
 
 All tests should pass.
 

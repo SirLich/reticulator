@@ -4,11 +4,11 @@ import functools
 import shutil
 from typing import Union, Tuple
 
-sys.path.insert(0, '../reticulator')
+# sys.path.insert(0, '../reticulator')
 from reticulator import *
 
 def get_packs() -> Tuple[BehaviorPack, ResourcePack]:
-    project = Project('./content/bp/', './content/rp/')
+    project = Project('./test/content/bp/', './test/content/rp/')
     project.set_output_directory('out')
     return project.get_packs()
 
@@ -18,24 +18,24 @@ def save_and_return_packs(rp: ResourcePack = None, bp: BehaviorPack = None, forc
 
     # Save the old packs
     if rp is not None:
-        rp.output_directory = './out/rp/'
+        rp.output_directory = './test/out/rp/'
         rp.save(force=force)
     
     if bp is not None:
-        bp.output_directory = './out/bp/'
+        bp.output_directory = './test/out/bp/'
         bp.save(force=force)
 
     # Return the saved packs packs
-    project = Project('./out/bp/', './out/rp/')
+    project = Project('./test/out/bp/', './test/out/rp/')
     return project.behavior_pack, project.resource_pack
 
 def prepare_output_directory():
     try:
-        shutil.rmtree('./out')
+        shutil.rmtree('./test/out')
     except OSError as e:
         pass
 
-    os.mkdir('./out')
+    os.mkdir('./test/out')
 
 ## --------------- ##
 ## General Methods ##
@@ -125,7 +125,7 @@ class TestDirty(unittest.TestCase):
 
 class TestDeletion(unittest.TestCase):
     def setUp(self) -> None:
-        self.project = Project('./content/bp/', './content/rp/')
+        self.project = Project('./test/content/bp/', './test/content/rp/')
         self.bp = self.project.behavior_pack
         self.rp = self.project.resource_pack
 
@@ -176,7 +176,7 @@ class TestJsonPathAccess(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.project = Project('./content/bp/', './content/rp/')
+        self.project = Project('./test/content/bp/', './test/content/rp/')
         self.bp = self.project.behavior_pack
         self.rp = self.project.resource_pack
     
@@ -289,7 +289,7 @@ class TestFormatVersion(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.project = Project('./content/bp/', './content/rp/')
+        self.project = Project('./test/content/bp/', './test/content/rp/')
         self.bp = self.project.behavior_pack
         self.rp = self.project.resource_pack
         self.entity = self.bp.get_entity('minecraft:dolphin')

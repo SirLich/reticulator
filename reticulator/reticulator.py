@@ -7,7 +7,7 @@ import glob
 from functools import cached_property
 from typing import Tuple
 
-from core import *
+from .core import *
 
 def ImplementFormatVersion(jsonpath: str = "format_version"):
     """
